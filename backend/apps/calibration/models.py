@@ -3,6 +3,7 @@ from django.conf import settings
 from django.db import models
 
 class ObservedTrip(models.Model):
+    prediction = models.ForeignKey('routing.RoutePrediction',null=True,blank=True,on_delete=models.PROTECT)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     distance_m = models.FloatField()
