@@ -17,7 +17,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libgdal-dev libgeos-dev libproj-dev
       - run: uv sync --extra dev
       - run: uv run --extra dev ruff check --select E4,E9,F63,F7,F82 backend tests
-      - run: uv run --extra dev pytest -q --ignore=tests/test_estimate_api.py --ignore=tests/test_moderation_api.py --ignore=tests/test_calibration_api.py
+      - run: uv run --extra dev pytest -q --ignore=tests/test_estimate_api.py --ignore=tests/test_moderation_api.py --ignore=tests/test_calibration_api.py --ignore=tests/test_auth_api.py
   frontend:
     runs-on: ubuntu-24.04
     defaults: {run: {working-directory: frontend}}
@@ -66,4 +66,4 @@ jobs:
       - run: cd backend && uv run --project .. python manage.py migrate --noinput
       - run: cd backend && uv run --project .. python manage.py check
       - run: cd backend && uv run --project .. python manage.py makemigrations --check --dry-run
-      - run: uv run --extra dev pytest -q tests/test_estimate_api.py tests/test_moderation_api.py tests/test_calibration_api.py
+      - run: uv run --extra dev pytest -q tests/test_estimate_api.py tests/test_moderation_api.py tests/test_calibration_api.py tests/test_auth_api.py
