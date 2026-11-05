@@ -3,6 +3,8 @@ optional DEM and two fuel scenarios. No fabricated real-time traffic.
 """
 import logging
 from django.conf import settings
+from django.contrib.gis.geos import Point, LineString
+from apps.routing.models import RouteRequest, RoutePrediction
 from django.contrib.gis.geos import Polygon
 from rest_framework import serializers
 from rest_framework.permissions import AllowAny
@@ -31,6 +33,7 @@ class EstimateSerializer(serializers.Serializer):
     cargo_kg = serializers.FloatField(default=0,min_value=0,max_value=150)
     ac_on = serializers.BooleanField(default=False)
     signal_red_probability = serializers.FloatField(default=0.5,min_value=0,max_value=1)
+    save_history = serializers.BooleanField(default=False)
 
 
 def _nearby_obstacles(route) -> list[ObstaclePoint]:
@@ -77,6 +80,8 @@ class EstimateView(APIView):
         end=(data['destination']['lat'],data['destination']['lon'])
         if start==end:
             return Response({'error':'origin_equals_destination'},status=400)
+        if data['save_history'] and not request.user.is_authenticated:
+            return Response({'error':'authentication_required_for_history'},status=401)
         try:
             routes=OsrmClient(settings.OSRM_BASE_URL).candidates(start,end)
         except RoutingError as exc:
@@ -88,6 +93,15 @@ class EstimateView(APIView):
             cd=0.35,frontal_area_m2=1.85,rolling_resistance=.013,
             drivetrain_efficiency=.86,engine_efficiency=.19,
             idle_lph=.75+(.20 if data['ac_on'] else 0),reference_urban_l100=9.5)
+        history=None
+        if data['save_history']:
+            # Explicit opt-in: anonymous coordinates are never stored.
+            history=RouteRequest.objects.create(user=request.user,
+                origin=Point(start[1],start[0],srid=4326),
+                destination=Point(end[1],end[0],srid=4326),
+                scenario={'passengers':data['passengers'],'cargo_kg':data['cargo_kg'],
+                          'ac_on':data['ac_on'],
+                          'signal_red_probability':data['signal_red_probability']})
         response=[]
         for i,route in enumerate(routes[:3]):
             if not 0<route.distance_m<=100_000 or route.duration_s>36_000:continue
@@ -115,7 +129,21 @@ class EstimateView(APIView):
                 warnings.append('signal_red_probability_is_assumed')
             else:
                 warnings.append('signal_phase_unknown_or_no_reviewed_signals')
+            prediction_id=None
+            if history is not None:
+                stored=RoutePrediction.objects.create(request=history,
+                    geometry=LineString(*route.coordinates,srid=4326),
+                    distance_m=route.distance_m,duration_s=route.duration_s,
+                    baseline_l=baseline_liters(route.distance_m,9.5),
+                    estimated_l=liters,idle_l=idle_l,propulsion_l=traction_l,
+                    model_version=green.model_version,warnings=warnings,
+                    assumptions={'physics_uncalibrated':True,
+                        'terrain_available':terrain is not None,
+                        'applied_obstacles':len(applied),
+                        'signal_red_probability':prob})
+                prediction_id=stored.pk
             response.append({
+                'prediction_id':prediction_id,
                 'index':i,'distance_m':route.distance_m,'osrm_duration_s':route.duration_s,
                 'modeled_duration_s':round(green.duration_s*(1-prob)+red.duration_s*prob,2),
                 'geometry':{'type':'LineString','coordinates':route.coordinates},
