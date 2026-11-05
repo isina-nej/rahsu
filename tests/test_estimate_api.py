@@ -35,3 +35,23 @@ def test_invalid_out_of_scope_coordinates_rejected():
     response=APIClient().post('/api/v1/estimates/',{
         'origin':{'lat':32,'lon':51.3},'destination':{'lat':35.7,'lon':51.31}},format='json')
     assert response.status_code==400
+
+@pytest.mark.django_db
+def test_opt_in_history_creates_owned_predictions(settings):
+    from django.contrib.auth import get_user_model
+    from apps.routing.models import RouteRequest, RoutePrediction
+    user=get_user_model().objects.create_user(username='test_driver',password='not-a-real-secret')
+    settings.ELEVATION_BASE_URL=''
+    route=RouteCandidate(940,110,ROUTE,(RoadStep('خیابان آزادی',ROUTE),))
+    c=APIClient()
+    data={'origin':{'lat':35.7,'lon':51.3},'destination':{'lat':35.7,'lon':51.31},
+          'save_history':True}
+    with patch('apps.routing.views.OsrmClient') as provider:
+        provider.return_value.candidates.return_value=[route]
+        assert c.post('/api/v1/estimates/',data,format='json').status_code==401
+        c.force_authenticate(user=user)
+        response=c.post('/api/v1/estimates/',data,format='json')
+    assert response.status_code==200,response.content
+    assert response.json()['routes'][0]['prediction_id'] is not None
+    assert RouteRequest.objects.count()==1
+    assert RoutePrediction.objects.count()==1
