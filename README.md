@@ -1,56 +1,65 @@
 # راه‌سو | Rahsu
 
-**برآورد پژوهشی مصرف بنزین پراید در تهران، بر مبنای مسیر، سرعت، توقف، شیب و موانع**.
+**سامانه پژوهشی تخمین مصرف بنزین پراید ۱۳۱ در تهران** با مسیریابی، شواهد موانع، مدل فیزیکی، ابزار کالیبراسیون و مشاهده‌پذیری از راه دور.
 
-> وضعیت: اسکلت اجرایی و اولین برش عمودی MVP. نتایج سوخت تا کالیبراسیون با داده رانندگی واقعی **تخمینی** هستند؛ سرویس مسیریابی بدون داده OSRM تهران پاسخ واقعی تولید نمی‌کند.
+> وضعیت: MVP توسعه‌ای و قابل تست. مسیر تهران فقط بعد از تأمین گراف OSRM و داده‌های OSM واقعی کار می‌کند. اعداد مصرف هنوز با رانندگی واقعی پراید اعتبارسنجی نشده‌اند؛ برآورد علمی‌اند، نه اندازه‌گیری.
 
-## معماری
+## فناوری‌ها
 
-- Backend: Python 3.12, Django 5.2, DRF, PostGIS; `backend/domain` مستقل از Django.
-- Frontend: React, TypeScript, Vite, MapLibre GL JS.
-- Routing: آداپتور OSRM مستقل؛ data ingestion جداگانه.
-- Observability: JSON logs/trace context, Loki API read-only, Prometheus/Grafana/Tempo/Alloy configs.
-- CI: Python tests/syntax lint, JS build, Docker Compose validation (environment-dependent).
+- Django 5.2 LTS + Django REST Framework + GeoDjango / PostGIS
+- دامنه مستقل `backend/domain`: فیزیک سوخت، سناریوی حرکت، شیب، تطبیق موانع، VT-Micro آزمایشگاهی
+- React + TypeScript + MapLibre + OpenFreeMap
+- OSRM (نیازمند داده تهران)، OSM / osmium و سرویس ارتفاع اختیاری OpenTopoData
+- Redis، Celery، OpenTelemetry، Grafana، Prometheus، Tempo، Loki، Alloy
+- GitHub Actions برای Python، PostGIS، Frontend و اعتبارسنجی Compose
 
-## راه‌اندازی
+## اجرا
+
+1. `cp .env.example .env` و تمام رمزها و کلیدهای پیش‌فرض را عوض کنید.
+2. `docker compose up --build -d`
+3. `docker compose exec api python manage.py migrate`
+4. `docker compose exec api python manage.py seed_pride`
+5. فایل `iran-latest.osm.pbf` را از Geofabrik تهیه و checksum را تأیید کنید.
+6. `bash scripts/prepare_tehran_data.sh /path/to/iran-latest.osm.pbf`
+7. `bash scripts/prepare_osrm.sh data/osrm/tehran.osm.pbf`
+8. `docker compose --profile routing up -d osrm`
+9. `docker compose exec api python manage.py import_osm_geojson /data/osm/tehran-obstacles.geojson`
+10. `docker compose --profile monitoring up -d` (اختیاری، برای ابزارهای نظارتی)
+
+پس از راه‌اندازی، وب از `http://localhost:8080` و API از مسیر `/api/` در دسترس است. `/admin/` پنل Django است؛ با `createsuperuser` حساب مدیر ایجاد کنید.
+
+آدرس‌یابی فارسی فقط با تنظیم `GEOCODER_BASE_URL` روی سرویس مجاز Nominatim-compatible فعال می‌شود؛ در غیر این صورت انتخاب دستی نقاط روی نقشه در دسترس است. داده ارتفاع با `ELEVATION_BASE_URL` اختیاری است. ترافیک زنده **در این نسخه موجود نیست**.
+
+## APIها
+
+- `POST /api/v1/estimates/` — مسیر، هزینه تخمینی سوخت و بازه سناریو
+- `GET /api/v1/geocode/?q=...` — جست‌وجوی فارسی تهران، در صورت اتصال ارائه‌دهنده
+- `GET /api/v1/obstacles/?bbox=...` — موانع موجود
+- `POST /api/v1/obstacle-reports/` — گزارش تأییدنشده با حساب کاربری
+- `GET/PATCH /api/v1/admin/obstacle-reports/` — تأیید مدیر با تاریخچه ممیزی
+- `GET /api/v1/auth/csrf/`, `POST /api/v1/auth/login/`, `GET /api/v1/auth/me/`
+- `GET/POST /api/v1/trips/observations/` — داده واقعی سوخت با رضایت
+- `DELETE /api/v1/me/study-data/` — حذف داده شخصی با تأیید
+- `GET /api/v1/admin/observability/logs` — جست‌وجوی محدود لاگ
+- `GET /api/v1/admin/observability/metrics/summary` — متریک‌های محدود
+- `GET /api/v1/admin/observability/traces/{id}` — Trace مشخص
+- `GET /api/schema/`, `GET /api/docs/` — مستند OpenAPI
+
+## تحقیقات و محدودیت‌ها
+
+- مدل فیزیکی و VT-Micro هنوز نیازمند داده واقعی خودرو و اعتبارسنجی بر اساس سفرهای مستقل هستند.
+- موانع OSM بدون بازبینی و تطبیق محافظه‌کارانه، وارد مدل مصرف نمی‌شوند.
+- چراغ راهنمایی به‌صورت دو سناریوی سبز/قرمز با احتمال فرضی محاسبه می‌شود.
+- مقایسه فقط بین مسیرهای ارائه‌شده OSRM است، نه بهینه‌سازی سراسری تمام مسیرهای ممکن.
+- برای چگونگی تهیه داده، حریم خصوصی، API و پایش، پوشه `docs/` را ببینید.
+- کاشی‌های نقشه به‌صورت پیش‌فرض از OpenFreeMap با انتساب داده OpenStreetMap ارائه می‌شوند. شرایط ارائه‌دهنده و مجوز ODbL را رعایت کنید.
+
+## توسعه و تست
 
 ```bash
-cp .env.example .env
-# replace DJANGO_SECRET_KEY and POSTGRES_PASSWORD
-# docker compose --profile routing up --build -d    # after importing Tehran OSRM data
-# docker compose up --build -d                       # API/UI/DB only; route estimation needs OSRM
-# docker compose exec api python manage.py migrate
-# docker compose exec api python manage.py seed_pride
+uv sync --extra dev --extra science
+uv run --extra dev --extra science pytest -q --ignore=tests/test_estimate_api.py --ignore=tests/test_moderation_api.py --ignore=tests/test_calibration_api.py --ignore=tests/test_auth_api.py --ignore=tests/test_privacy_api.py
+cd frontend && npm install && npm run build
 ```
 
-> اجرای سرویس‌های full-telemetry و routing پروفایل اختیاری دارد؛ مستندات `docs/operations/` را ببینید. URL نقشه نمونه برای توسعه است و تولید به tile provider مجاز نیاز دارد.
-
-## اجرای توسعه محلی
-
-```bash
-uv sync --extra dev
-cd backend && uv run --project .. python manage.py check
-cd ../frontend && npm ci && npm run build
-```
-
-## مسیرها
-
-- `POST /api/v1/estimates/` — محاسبه پایه و فیزیکی روی مسیرهای برگشتی OSRM (در صورت در دسترس بودن).
-- `GET /api/v1/vehicles/` — مشخصات پراید.
-- `GET /api/v1/obstacles/` — موانع ثبت‌شده در دیتابیس.
-- `POST /api/v1/obstacle-reports/` — گزارش اصلاح؛ نیازمند احراز هویت.
-- `GET /api/v1/health/live` و `/api/v1/health/ready`.
-- `GET /api/v1/admin/observability/logs` — API فقط‌خواندنی و محافظت‌شده Loki.
-- `GET /api/schema/` و `/api/docs/` — OpenAPI.
-
-## اصول توسعه
-
-1. محور پژوهش: یک پراید ۱۳۱ دنده‌دستی در تهران؛ معماری قابل تعمیم به خودرو و شهر دیگر.
-2. واحدها در Domain به SI؛ هر پارامتر بدون داده با برچسب unknown ثبت شود.
-3. تغییرات ساختار DB فقط با Django Migrations، SQL قدیمی در `docs/architecture/reference-schema.sql` صرفاً مرجع است.
-4. لاگ حاوی Token/Secret/مشخصات کامل مکان کاربر نباشد.
-5. هر مدل با `version`, provenance و داده اعتبارسنجی ثبت شود. هیچ درصد خطای تضمینی فعلاً اعلام نمی‌شود.
-
-## وضعیت تحویل
-
-برای تشخیص فاصله بین **پیاده‌سازی واقعی** و **برنامه آتی**، فایل `docs/STATUS.md` را بخوانید.
+تست‌های دیتابیس به PostgreSQL + PostGIS نیاز دارند و در Job اختصاصی CI اجرا می‌شوند. وضعیت دقیق در `docs/STATUS.md` ثبت شده است.

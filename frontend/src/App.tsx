@@ -141,7 +141,7 @@ export default function App(){
   useEffect(()=>{
     if(!mapNode.current)return;
     const m=new maplibregl.Map({container:mapNode.current,
-      style:import.meta.env.VITE_MAP_STYLE_URL||'https://demotiles.maplibre.org/style.json',
+      style:import.meta.env.VITE_MAP_STYLE_URL||'https://tiles.openfreemap.org/styles/liberty',
       center:TEHRAN,zoom:11});
     m.addControl(new maplibregl.NavigationControl(),'top-left');
     let controller:AbortController|null=null;
