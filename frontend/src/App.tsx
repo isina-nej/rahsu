@@ -4,9 +4,11 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { AlertTriangle, CarFront, CheckCircle2, Fuel, MapPin, RotateCcw, ShieldCheck, SlidersHorizontal, TrafficCone } from 'lucide-react';
 
 type Point = {lat:number;lon:number};
+type SessionInfo={authenticated:boolean;username:string;staff:boolean;signup_enabled:boolean};
 type Place = Point & {label:string};
 type Obstacle = {id:number;kind:string;lon:number;lat:number;source:string;verified:boolean;road_name:string};
 type Route = {
+  prediction_id:number|null;
   index:number; distance_m:number; osrm_duration_s:number; modeled_duration_s:number;
   estimated_l:number;estimated_range_l:number[];baseline_l:number;
   idle_l:number;propulsion_l:number;warnings:string[];
@@ -47,11 +49,81 @@ export default function App(){
   const [obstacleWarning,setObstacleWarning]=useState('');
   const [passengers,setPassengers]=useState(1),[ac,setAc]=useState(false),[cargo,setCargo]=useState(0);
   const [redProbability,setRedProbability]=useState(0.5);
+  const [saveHistory,setSaveHistory]=useState(false);
+  const [session,setSession]=useState<SessionInfo>({authenticated:false,username:'',staff:false,signup_enabled:false});
+  const [username,setUsername]=useState(''),[password,setPassword]=useState('');
+  const [authBusy,setAuthBusy]=useState(false),[authError,setAuthError]=useState('');
+  const [observedFuel,setObservedFuel]=useState(''),[observedDistance,setObservedDistance]=useState('');
+  const [observationMethod,setObservationMethod]=useState('obd');
+  const [consent,setConsent]=useState(false),[observationMessage,setObservationMessage]=useState('');
   const [originText,setOriginText]=useState(''),[destText,setDestText]=useState('');
   const [places,setPlaces]=useState<Place[]>([]);
   const [placeTarget,setPlaceTarget]=useState<'origin'|'destination'>('origin');
   const [geocodeBusy,setGeocodeBusy]=useState(false);
   const [error,setError]=useState(''),[busy,setBusy]=useState(false);
+
+  useEffect(()=>{
+    let live=true;
+    fetch(API+'/api/v1/auth/me/',{credentials:'same-origin'})
+      .then(r=>r.json()).then((s:SessionInfo)=>{if(live)setSession(s);})
+      .catch(()=>{});
+    return()=>{live=false;};
+  },[]);
+
+  const csrf=async()=>{
+    const r=await fetch(API+'/api/v1/auth/csrf/',{credentials:'same-origin'});
+    if(!r.ok)throw new Error('خطای دریافت CSRF');
+    const data=await r.json() as {csrfToken:string};
+    return data.csrfToken;
+  };
+  const signIn=async(mode:'login'|'register')=>{
+    if(authBusy)return;setAuthBusy(true);setAuthError('');
+    try{
+      const token=await csrf();
+      const response=await fetch(API+'/api/v1/auth/'+mode+'/',{method:'POST',
+        credentials:'same-origin',
+        headers:{'Content-Type':'application/json','X-CSRFToken':token},
+        body:JSON.stringify({username,password})});
+      const body=await response.json() as {authenticated?:boolean;error?:string;username?:string};
+      if(!response.ok)throw new Error(body.error==='invalid_credentials'?
+        'نام کاربری یا رمز عبور نامعتبر است.':body.error||'ورود انجام نشد.');
+      const current=await fetch(API+'/api/v1/auth/me/',{credentials:'same-origin'});
+      setSession(await current.json() as SessionInfo);
+      setPassword('');
+    }catch(e){setAuthError(e instanceof Error?e.message:'خطا در ورود');}
+    finally{setAuthBusy(false);}
+  };
+  const signOut=async()=>{
+    try{
+      const token=await csrf();
+      await fetch(API+'/api/v1/auth/logout/',{method:'POST',credentials:'same-origin',
+        headers:{'X-CSRFToken':token}});
+    }finally{setSaveHistory(false);setRoutes([]);
+      setSession(s=>({...s,authenticated:false,username:'',staff:false}));}
+  };
+
+  const submitObservation=async()=>{
+    const route=routes[selected];
+    if(!route?.prediction_id||!consent){setObservationMessage('تأیید رضایت و ذخیره مسیر الزامی است.');return;}
+    const distance=Number(observedDistance);
+    const fuel=Number(observedFuel);
+    if(!(distance>=100&&distance<=100000&&fuel>0&&fuel<=30)){
+      setObservationMessage('مسافت واقعی و لیتر مصرف‌شده را درست وارد کنید.');return;}
+    setObservationMessage('');
+    try{
+      const token=await csrf();
+      const response=await fetch(API+'/api/v1/trips/observations/',{
+        method:'POST',credentials:'same-origin',
+        headers:{'Content-Type':'application/json','X-CSRFToken':token},
+        body:JSON.stringify({prediction_id:route.prediction_id,distance_m:distance,
+          observed_fuel_l:fuel,method:observationMethod,consent_given:consent})
+      });
+      const body=await response.json() as {error?:string};
+      if(!response.ok)throw new Error(body.error||'ثبت ناموفق بود');
+      setObservationMessage('اندازه‌گیری ثبت شد. از مشارکت در اعتبارسنجی سپاسگزاریم.');
+      setObservedDistance('');setObservedFuel('');setConsent(false);
+    }catch(e){setObservationMessage(e instanceof Error?e.message:'خطای ثبت اندازه‌گیری');}
+  };
 
   useEffect(()=>{
     if(!mapNode.current)return;
@@ -187,7 +259,7 @@ export default function App(){
       const response=await fetch(API+'/api/v1/estimates/',{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({origin,destination,passengers,cargo_kg:cargo,ac_on:ac,
-          signal_red_probability:redProbability})
+          signal_red_probability:redProbability,save_history:saveHistory&&session.authenticated})
       });
       const body=await response.json() as EstimateResponse&{error?:string};
       if(!response.ok)throw new Error(
@@ -208,7 +280,23 @@ export default function App(){
         <span className="brand"><CarFront size={25}/> راه‌سو</span>
         <small>تخمین پژوهشی مصرف بنزین پراید در تهران</small>
       </header>
-      <section><h2><MapPin size={17}/> مبدأ و مقصد</h2>
+      <section className="auth-box"><h2><ShieldCheck size={17}/> حساب پژوهشی</h2>
+      {session.authenticated?
+        <div className="auth-signed"><span>ورود به‌عنوان {session.username}</span>
+          <button className="text-button" onClick={()=>void signOut()}>خروج</button></div>
+        :<><p>برای ثبت مسیر و سوخت واقعی، وارد شوید. محاسبه بدون حساب هم ممکن است.</p>
+          <div className="inputs-two">
+            <label>نام کاربری<input value={username} autoComplete="username" onChange={e=>setUsername(e.target.value)}/></label>
+            <label>رمز عبور<input type="password" value={password} autoComplete="current-password"
+              onChange={e=>setPassword(e.target.value)}/></label>
+          </div>
+          <div className="auth-actions">
+            <button disabled={authBusy||!username||!password} onClick={()=>void signIn('login')}>ورود</button>
+            {session.signup_enabled&&<button disabled={authBusy||!username||!password}
+              onClick={()=>void signIn('register')}>ثبت‌نام</button>}
+          </div>{authError&&<p role="alert" className="auth-error">{authError}</p>}</>}
+    </section>
+    <section><h2><MapPin size={17}/> مبدأ و مقصد</h2>
         <p>روی نقشه دو نقطه را انتخاب کنید، یا آدرس را جست‌وجو کنید.</p>
         <div className="geo-search"><label>جست‌وجوی مبدأ<input value={originText}
           onChange={e=>setOriginText(e.target.value)}
@@ -236,6 +324,10 @@ export default function App(){
         <label>وزن بار (کیلوگرم)<input type="number" min="0" max="150" value={cargo}
           onChange={e=>setCargo(Math.min(150,Math.max(0,+e.target.value||0)))}/></label></div>
         <label className="switch"><input type="checkbox" checked={ac} onChange={e=>setAc(e.target.checked)}/> کولر روشن است</label>
+        <label className="switch"><input type="checkbox" checked={saveHistory}
+          disabled={!session.authenticated}
+          onChange={e=>setSaveHistory(e.target.checked)}/>
+          ذخیره اختیاری مسیر برای اعتبارسنجی (فقط کاربران واردشده)</label>
         <label>احتمال فرضی قرمز بودن چراغ: {faNum(redProbability*100,0)}٪
           <input type="range" min="0" max="1" step=".1" value={redProbability}
             onChange={e=>setRedProbability(Number(e.target.value))}/>
@@ -273,6 +365,25 @@ export default function App(){
         <ul className="warnings">{[...new Set(active.warnings)].slice(0,9).map(w=>
           <li key={w}>{warnings[w]||w.replaceAll('_',' ')}</li>)}</ul>
         <small>نسخه مدل: {active.model_version}</small>
+      </section>}
+      {session.authenticated&&active?.prediction_id&&<section className="observation">
+        <h2><Fuel size={17}/> ثبت مصرف واقعی همین مسیر</h2>
+        <p>تنها در صورت اندازه‌گیری واقعی بنزین، داده را ثبت کنید. مقدار تخمینی را به‌عنوان مقدار واقعی وارد نکنید.</p>
+        <div className="inputs-two">
+          <label>مسافت واقعی (متر)<input type="number" min="100" max="100000" step="1"
+            value={observedDistance} onChange={e=>setObservedDistance(e.target.value)}/></label>
+          <label>بنزین اندازه‌گیری‌شده (لیتر)<input type="number" min=".001" max="30" step=".001"
+            value={observedFuel} onChange={e=>setObservedFuel(e.target.value)}/></label>
+        </div>
+        <label>روش اندازه‌گیری<select value={observationMethod}
+          onChange={e=>setObservationMethod(e.target.value)}>
+          <option value="obd">OBD / ECU</option><option value="full_tank">باک پُر (کم‌دقت برای سفر کوتاه)</option>
+          <option value="other">روش دیگر</option></select></label>
+        <label className="switch"><input type="checkbox" checked={consent}
+          onChange={e=>setConsent(e.target.checked)}/>
+          با ذخیره داده این سفر برای ارزیابی مدل موافقم.</label>
+        <button className="submit" disabled={!consent} onClick={()=>void submitObservation()}>ثبت اندازه‌گیری</button>
+        {observationMessage&&<p role="status">{observationMessage}</p>}
       </section>}
       <p className="disclaimer"><ShieldCheck size={15}/> اعداد تخمینی‌اند و هنوز با داده مصرف واقعی پراید اعتبارسنجی نشده‌اند. مسیرها از OSRM دریافت می‌شوند و پوشش کامل موانع تضمین نمی‌شود.</p>
     </aside>
