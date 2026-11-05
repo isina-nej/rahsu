@@ -22,11 +22,11 @@ class OsrmClient:
     def candidates(self, origin: tuple[float, float], dest: tuple[float, float]) -> list[RouteCandidate]:
         coords = f"{origin[1]},{origin[0]};{dest[1]},{dest[0]}"
         try:
-            with httpx.Client(timeout=self.timeout_s) as client:
-                response = client.get(self.base_url+"/route/v1/driving/"+coords,
-                    params={"alternatives":"true","overview":"full","geometries":"geojson","steps":"true"})
-                response.raise_for_status()
-                data = response.json()
+            response = httpx.get(self.base_url+"/route/v1/driving/"+coords,
+                    params={"alternatives":"true","overview":"full","geometries":"geojson","steps":"true"},
+                    timeout=self.timeout_s)
+            response.raise_for_status()
+            data = response.json()
         except (httpx.HTTPError, ValueError) as exc:
             raise RoutingError("routing_provider_unavailable") from exc
         if not isinstance(data,dict) or data.get("code") != "Ok":
