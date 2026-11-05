@@ -63,7 +63,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.AnonRateThrottle", "rest_framework.throttling.UserRateThrottle"],
-    "DEFAULT_THROTTLE_RATES": {"anon": "60/hour", "user": "600/hour"},
+    "DEFAULT_THROTTLE_RATES": {"anon": "60/hour", "user": "600/hour", "auth":"10/hour"},
 }
 SPECTACULAR_SETTINGS = {"TITLE": "راه‌سو API", "DESCRIPTION": "Tehran Pride fuel estimate research API", "VERSION": "0.1.0"}
 SESSION_COOKIE_SECURE = not DEBUG
