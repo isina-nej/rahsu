@@ -11,7 +11,11 @@ from datetime import datetime,timedelta,timezone
 
 import httpx
 from django.conf import settings
-from django.db import connection
+from django.db import connection, DatabaseError
+from .models import OpsAccessEvent
+from .logging import request_id
+from rest_framework.throttling import SimpleRateThrottle
+from rest_framework.permissions import IsAdminUser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -38,8 +42,29 @@ def ops_authorized(request):
        hmac.compare_digest(supplied,expected))
 
 
+class OpsRateThrottle(SimpleRateThrottle):
+    scope='ops'
+
+    def get_cache_key(self,request,view):
+        return self.cache_format % {'scope':self.scope,
+                                    'ident':self.get_ident(request)}
+
 class OpsView(APIView):
     permission_classes=[AllowAny]
+    throttle_classes=[OpsRateThrottle]
+    audit_operation='logs'
+
+    def finalize_response(self,request,response,*args,**kwargs):
+        result=super().finalize_response(request,response,*args,**kwargs)
+        actor=request.user if request.user.is_authenticated and request.user.is_staff else None
+        method='staff' if actor else ('token' if ops_authorized(request) else 'denied')
+        try:
+            OpsAccessEvent.objects.create(
+                operation=self.audit_operation,auth_method=method,
+                response_status=result.status_code,request_id=request_id.get(),user=actor)
+        except DatabaseError:
+            log.error('ops.audit.write_failed operation=%s',self.audit_operation)
+        return result
 
     def authorized(self,request):
         if not ops_authorized(request):
@@ -118,6 +143,7 @@ class LogsView(OpsView):
 
 
 class MetricsSummaryView(OpsView):
+    audit_operation='metrics'
     def get(self,request):
         denied=self.authorized(request)
         if denied is not None:return denied
@@ -139,6 +165,7 @@ class MetricsSummaryView(OpsView):
 
 
 class TraceView(OpsView):
+    audit_operation='trace'
     def get(self,request,trace_id):
         denied=self.authorized(request)
         if denied is not None:return denied
@@ -157,3 +184,16 @@ class TraceView(OpsView):
             return Response({'error':'tempo_unavailable'},status=503)
         log.info('ops.trace.read')
         return Response({'trace_id':trace_id.lower(),'trace':data})
+
+class AuditAccessView(OpsView):
+    """Staff-only, bounded, metadata-only audit trail."""
+    permission_classes=[IsAdminUser]
+    audit_operation='audit'
+
+    def get(self,request):
+        rows=OpsAccessEvent.objects.select_related('user').order_by('-created_at')[:100]
+        return Response({'results':[
+            {'id':x.pk,'created_at':x.created_at,'operation':x.operation,
+             'auth_method':x.auth_method,'response_status':x.response_status,
+             'request_id':x.request_id,'actor':x.user.get_username() if x.user else None}
+            for x in rows],'limit':100})
