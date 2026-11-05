@@ -43,3 +43,14 @@ The API reports `topology_matched_osm_calming` separately from
 per-trip fuel accuracy is made. If annotations are missing, automatic effects
 fail closed (evidence-only). OSRM data and OSM obstacle data must refer to a
 compatible dated extract; otherwise ID membership may be stale.
+
+### Data-version reproducibility
+
+When OSRM supplies the optional `data_version` field (OSM source timestamp),
+each route response returns it as `map_data_version`. With the user's
+explicit `save_history` opt-in, the timestamp is also stored in
+`routing.RouteRequest.source_version`. The timestamp may be absent if
+the OSRM extract did not contain replication metadata; in that case the API
+returns `null` instead of inventing provenance. This value does not validate
+that imported obstacle GeoJSON is from the same source snapshot, which must
+be checked operationally.

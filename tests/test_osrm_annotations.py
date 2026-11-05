@@ -6,7 +6,7 @@ def test_route_osm_node_annotations_are_parsed_without_float_conversion(monkeypa
     class Resp:
         def raise_for_status(self): pass
         def json(self):
-            return {'code':'Ok','routes':[{
+            return {'code':'Ok','data_version':'2026-10-31T00:00:00Z','routes':[{
                 'distance':950,'duration':115,
                 'geometry':{'coordinates':[[51.3,35.7],[51.305,35.7],[51.31,35.7]]},
                 'legs':[{'annotation':{'nodes':[123,big_id,123,0,None,True]},
@@ -21,4 +21,5 @@ def test_route_osm_node_annotations_are_parsed_without_float_conversion(monkeypa
     monkeypatch.setattr('apps.routing.osrm.httpx.get',fake_get)
     route=OsrmClient('http://osrm:5000').candidates((35.7,51.3),(35.7,51.31))[0]
     assert route.osm_node_ids==(123,big_id)
+    assert route.osm_data_version=='2026-10-31T00:00:00Z'
     assert route.road_steps[0].name=='خیابان آزادی'

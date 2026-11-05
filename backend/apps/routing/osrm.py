@@ -14,6 +14,7 @@ class RouteCandidate:
     coordinates: tuple[tuple[float, float], ...]
     road_steps: tuple[RoadStep, ...] = ()
     osm_node_ids: tuple[int, ...] = ()
+    osm_data_version: str = ""
 
 class OsrmClient:
     def __init__(self, base_url: str, timeout_s: float = 8.0):
@@ -32,6 +33,10 @@ class OsrmClient:
             raise RoutingError("routing_provider_unavailable") from exc
         if not isinstance(data,dict) or data.get("code") != "Ok":
             raise RoutingError("no_route")
+        # Optional OSM source timestamp from the OSRM extract, when configured.
+        version = data.get("data_version", "")
+        if not isinstance(version, str) or len(version) > 120:
+            version = ""
         candidates = []
         for item in data.get("routes",[])[:4]:
             try:
@@ -58,7 +63,7 @@ class OsrmClient:
                     if isinstance(raw,list) and len(raw)<=20_000:
                         node_ids.extend(n for n in raw if type(n) is int and n>0)
                 candidates.append(RouteCandidate(distance,duration,coords_geo,
-                                                tuple(steps),tuple(dict.fromkeys(node_ids))))
+                                                tuple(steps),tuple(dict.fromkeys(node_ids)),version))
             except (TypeError,ValueError,KeyError):
                 continue
         return candidates

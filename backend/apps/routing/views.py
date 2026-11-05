@@ -109,6 +109,7 @@ class EstimateView(APIView):
             history=RouteRequest.objects.create(user=request.user,
                 origin=Point(start[1],start[0],srid=4326),
                 destination=Point(end[1],end[0],srid=4326),
+                source_version=routes[0].osm_data_version,
                 scenario={'passengers':data['passengers'],'cargo_kg':data['cargo_kg'],
                           'ac_on':data['ac_on'],
                           'signal_red_probability':data['signal_red_probability']})
@@ -157,6 +158,7 @@ class EstimateView(APIView):
                 prediction_id=stored.pk
             response.append({
                 'prediction_id':prediction_id,
+                'map_data_version':route.osm_data_version or None,
                 'index':i,'distance_m':route.distance_m,'osrm_duration_s':route.duration_s,
                 'modeled_duration_s':round(green.duration_s*(1-prob)+red.duration_s*prob,2),
                 'geometry':{'type':'LineString','coordinates':route.coordinates},

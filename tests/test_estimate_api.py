@@ -92,3 +92,22 @@ def test_osrm_annotated_osm_speed_bump_changes_route_scenario(settings, monkeypa
     assert sum(o['applied'] for o in data['obstacles'])==1
     assert any(o['reason']=='osm_node_on_traversed_route'
                for o in data['obstacles'])
+
+@pytest.mark.django_db
+def test_explicit_opt_in_stores_osm_source_version_for_reproducibility(settings):
+    from django.contrib.auth import get_user_model
+    from apps.routing.models import RouteRequest
+    settings.ELEVATION_BASE_URL=''
+    user=get_user_model().objects.create_user(username='map-date-user',
+        password='not-a-real-secret')
+    route=RouteCandidate(940,110,ROUTE,osm_data_version='2026-10-31T00:00:00Z')
+    client=APIClient();client.force_authenticate(user=user)
+    with patch('apps.routing.views.OsrmClient') as provider:
+        provider.return_value.candidates.return_value=[route]
+        result=client.post('/api/v1/estimates/',{
+            'origin':{'lat':35.7,'lon':51.3},
+            'destination':{'lat':35.7,'lon':51.31},'save_history':True},
+            format='json')
+    assert result.status_code==200,result.content
+    assert RouteRequest.objects.get().source_version=='2026-10-31T00:00:00Z'
+    assert result.data['routes'][0]['map_data_version']=='2026-10-31T00:00:00Z'
