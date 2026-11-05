@@ -1,0 +1,260 @@
+project: PrideFuel Tehran
+release: v1.0-coordinated
+assumptions:
+- Pride 131 manual gasoline
+- Tehran only
+- No live traffic guarantees
+- Model accuracy requires real-world calibration
+tasks:
+- id: FND-01
+  workstream: Foundation
+  title: Monorepo, Docker Compose environments, uv/pnpm lockfiles
+  depends_on: []
+  acceptance:
+  - make setup از نسخه تازه
+  - CI lint/type green
+- id: FND-02
+  workstream: Foundation
+  title: Backend Django 5.2, DRF, GeoDjango, health endpoints
+  depends_on:
+  - FND-01
+  acceptance:
+  - GET /health/live
+  - GET /health/ready
+- id: FND-03
+  workstream: Foundation
+  title: PostGIS migrations translating existing 27-table reference schema
+  depends_on:
+  - FND-02
+  acceptance:
+  - migration clean DB
+  - pytest db constraints
+- id: FND-04
+  workstream: Foundation
+  title: Identity, auth, RBAC, MFA for admin
+  depends_on:
+  - FND-02
+  acceptance:
+  - 401/403 integration tests
+  - user/admin isolation
+- id: OBS-01
+  workstream: Observability
+  title: structlog JSON event schema, request correlation, redaction
+  depends_on:
+  - FND-02
+  acceptance:
+  - no secrets in JSON
+  - trace_id in logs
+- id: OBS-02
+  workstream: Observability
+  title: Alloy, Loki, Prometheus, Tempo, Grafana provisioning
+  depends_on:
+  - OBS-01
+  - FND-01
+  acceptance:
+  - instrumented trace visible
+  - dashboard provisioning test
+- id: DATA-01
+  workstream: Data
+  title: Geofabrik Iran PBF, Tehran extract, provenance/versioning
+  depends_on:
+  - FND-03
+  acceptance:
+  - checksum recorded
+  - Tehran data imported
+- id: DATA-02
+  workstream: Data
+  title: OSRM selfhost, route/match/nearest adapter and staging dataset switch
+  depends_on:
+  - DATA-01
+  acceptance:
+  - Tehran test route
+  - OSRM fallback error code
+- id: DATA-03
+  workstream: Data
+  title: Road graph, obstacle extraction, bridge/tunnel/oneway matching
+  depends_on:
+  - DATA-01
+  acceptance:
+  - misattribution regression tests
+  - deduplication tests
+- id: DATA-04
+  workstream: Data
+  title: DEM ingestion, smoothing, grade and uncertainty calculation
+  depends_on:
+  - DATA-01
+  acceptance:
+  - ascent/descent fixture
+  - missing elevation fallback
+- id: DATA-05
+  workstream: Data
+  title: Geocoding adapter, Persian normalization and map pin fallback
+  depends_on:
+  - FND-02
+  acceptance:
+  - no public Nominatim autocomplete
+  - out-of-bound city test
+- id: DATA-06
+  workstream: Data
+  title: Weather/traffic history adapter, source quality, degraded mode
+  depends_on:
+  - DATA-01
+  acceptance:
+  - missing-data warning
+  - time-of-day tested
+- id: OBST-01
+  workstream: Obstacles
+  title: Reports, moderation workflow and audit immutable trail
+  depends_on:
+  - DATA-03
+  - FND-04
+  acceptance:
+  - approve/reject flow
+  - overlay version change
+- id: FUEL-01
+  workstream: Science
+  title: Pride vehicle catalog and source-cited parameters
+  depends_on:
+  - FND-03
+  acceptance:
+  - nullable unknowns
+  - mass semantics tested
+- id: FUEL-02
+  workstream: Science
+  title: Deterministic motion simulation including stop/go and slope
+  depends_on:
+  - DATA-02
+  - DATA-03
+  - DATA-04
+  - FUEL-01
+  acceptance:
+  - reproducibility from seed
+  - no impossible negative speed
+- id: FUEL-03
+  workstream: Science
+  title: Baseline and physical power-based fuel estimators
+  depends_on:
+  - FUEL-02
+  acceptance:
+  - no double counting
+  - fuel nonnegative and unit tests
+- id: FUEL-04
+  workstream: Science
+  title: VT-Micro interface & calibration-only activation flag
+  depends_on:
+  - FUEL-03
+  acceptance:
+  - untrained model disabled
+  - synthetic fit test
+- id: FUEL-05
+  workstream: Science
+  title: Telemetry ingestion and calibration/evaluation pipelines
+  depends_on:
+  - FUEL-03
+  - FND-04
+  acceptance:
+  - consent required
+  - holdout split and MAE report
+- id: API-01
+  workstream: API
+  title: Versioned request/estimate async Celery job pipeline
+  depends_on:
+  - FND-03
+  - DATA-02
+  - FUEL-03
+  acceptance:
+  - 202 + status polling
+  - idempotent retry
+- id: API-02
+  workstream: API
+  title: OpenAPI schemas and generated typed TS client
+  depends_on:
+  - API-01
+  - OBST-01
+  acceptance:
+  - drf-spectacular output
+  - typecheck client
+- id: WEB-01
+  workstream: Frontend
+  title: RTL map UX Tehran origin/destination, route drawing, assumptions
+  depends_on:
+  - API-02
+  - DATA-05
+  acceptance:
+  - mobile RTL Playwright
+  - map attribution
+- id: WEB-02
+  workstream: Frontend
+  title: Result comparison, quality warnings, science breakdown charts
+  depends_on:
+  - WEB-01
+  - FUEL-03
+  acceptance:
+  - no fake accuracy
+  - multi candidate or single fallback
+- id: WEB-03
+  workstream: Frontend
+  title: Moderator review UI and vehicle scenario form
+  depends_on:
+  - OBST-01
+  - WEB-01
+  acceptance:
+  - unauthorized denies
+  - approve updates output
+- id: OBS-03
+  workstream: Observability
+  title: Authenticated logs/metrics/traces admin read API and dashboards
+  depends_on:
+  - OBS-02
+  - FND-04
+  acceptance:
+  - bounded allowlist queries
+  - audit every log read
+- id: OBS-04
+  workstream: Observability
+  title: Alerting and synthetic tests for API/OSRM/DB/ingest
+  depends_on:
+  - OBS-02
+  - API-01
+  acceptance:
+  - 500 alerts
+  - OSRM outage alerts
+- id: OPS-01
+  workstream: Operations
+  title: Backups encrypted, automated restore drill, rollback, compose deploy
+  depends_on:
+  - FND-03
+  - OBS-02
+  acceptance:
+  - restore checked
+  - ports not exposed
+- id: OPS-02
+  workstream: Operations
+  title: GitHub Actions CI/CD staged release, SAST, container scans
+  depends_on:
+  - WEB-02
+  - WEB-03
+  - OBS-03
+  - OPS-01
+  acceptance:
+  - all required checks green
+  - staging smoke
+- id: QA-01
+  workstream: Quality
+  title: Full E2E Tehran fixture, performance, privacy and security regression
+  depends_on:
+  - OPS-02
+  - FUEL-05
+  - OBS-04
+  acceptance:
+  - science benchmark report
+  - load & security suite passed
+- id: REL-01
+  workstream: Release
+  title: Single coordinated release with rollback and handover docs
+  depends_on:
+  - QA-01
+  acceptance:
+  - release sign-off
+  - monitoring smoke success
+  - all known limitations documented

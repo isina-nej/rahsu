@@ -1,0 +1,10 @@
+from django.conf import settings
+from django.contrib.gis.db import models as gis
+from django.db import migrations, models
+class Migration(migrations.Migration):
+    initial=True
+    dependencies=[migrations.swappable_dependency(settings.AUTH_USER_MODEL)]
+    operations=[
+        migrations.CreateModel(name='Obstacle',fields=[('id',models.BigAutoField(primary_key=True,serialize=False)),('kind',models.CharField(choices=[(x,x) for x in ('traffic_signals','bump','hump','stop','crossing','other')],max_length=32)),('location',gis.PointField(geography=True,srid=4326)),('osm_type',models.CharField(blank=True,max_length=16)),('osm_id',models.BigIntegerField(blank=True,null=True)),('verified',models.BooleanField(default=False)),('source',models.CharField(default='osm',max_length=24)),('direction',models.CharField(default='unknown',max_length=16)),('road_name',models.CharField(blank=True,max_length=180)),('updated_at',models.DateTimeField(auto_now=True))]),
+        migrations.CreateModel(name='ObstacleReport',fields=[('id',models.BigAutoField(primary_key=True,serialize=False)),('action',models.CharField(choices=[(x,x) for x in ('add','correct','remove')],max_length=10)),('kind',models.CharField(max_length=32)),('location',gis.PointField(geography=True,srid=4326)),('note',models.TextField(blank=True,max_length=1000)),('status',models.CharField(choices=[(x,x) for x in ('pending','approved','rejected')],default='pending',max_length=12)),('reviewed_at',models.DateTimeField(blank=True,null=True)),('created_at',models.DateTimeField(auto_now_add=True)),('obstacle',models.ForeignKey(blank=True,null=True,on_delete=models.SET_NULL,to='geo.obstacle')),('reviewer',models.ForeignKey(blank=True,null=True,on_delete=models.SET_NULL,related_name='reviewed_reports',to=settings.AUTH_USER_MODEL)),('submitted_by',models.ForeignKey(on_delete=models.PROTECT,to=settings.AUTH_USER_MODEL))]),
+        migrations.AddConstraint(model_name='obstacle',constraint=models.UniqueConstraint(fields=('osm_type','osm_id'),name='unique_osm_obstacle'))]

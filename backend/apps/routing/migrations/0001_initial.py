@@ -1,0 +1,7 @@
+from django.conf import settings
+from django.contrib.gis.db import models as gis
+from django.db import migrations,models
+class Migration(migrations.Migration):
+    initial=True
+    dependencies=[migrations.swappable_dependency(settings.AUTH_USER_MODEL)]
+    operations=[migrations.CreateModel(name='RouteRequest',fields=[('id',models.BigAutoField(primary_key=True,serialize=False)),('created_at',models.DateTimeField(auto_now_add=True)),('origin',gis.PointField(geography=True,srid=4326)),('destination',gis.PointField(geography=True,srid=4326)),('scenario',models.JSONField(default=dict)),('route_provider',models.CharField(default='osrm',max_length=32)),('source_version',models.CharField(blank=True,max_length=120)),('user',models.ForeignKey(blank=True,null=True,on_delete=models.SET_NULL,to=settings.AUTH_USER_MODEL))]),migrations.CreateModel(name='RoutePrediction',fields=[('id',models.BigAutoField(primary_key=True,serialize=False)),('geometry',gis.LineStringField(srid=4326)),('distance_m',models.FloatField()),('duration_s',models.FloatField()),('baseline_l',models.FloatField()),('estimated_l',models.FloatField()),('idle_l',models.FloatField()),('propulsion_l',models.FloatField()),('model_version',models.CharField(max_length=64)),('warnings',models.JSONField(default=list)),('assumptions',models.JSONField(default=dict)),('request',models.ForeignKey(on_delete=models.CASCADE,related_name='predictions',to='routing.routerequest'))])]
