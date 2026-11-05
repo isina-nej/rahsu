@@ -72,6 +72,7 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 OSRM_BASE_URL = os.getenv("OSRM_BASE_URL", "http://localhost:5000").rstrip("/")
+ELEVATION_BASE_URL = os.getenv("ELEVATION_BASE_URL", "").rstrip("/")
 LOKI_BASE_URL = os.getenv("LOKI_BASE_URL", "http://localhost:3100").rstrip("/")
 CELERY_BROKER_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
