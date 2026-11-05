@@ -4,6 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { AlertTriangle, CarFront, CheckCircle2, Fuel, MapPin, RotateCcw, ShieldCheck, SlidersHorizontal, TrafficCone } from 'lucide-react';
 
 type Point = {lat:number;lon:number};
+type Place = Point & {label:string};
 type Obstacle = {id:number;kind:string;lon:number;lat:number;source:string;verified:boolean;road_name:string};
 type Route = {
   index:number; distance_m:number; osrm_duration_s:number; modeled_duration_s:number;
@@ -47,6 +48,10 @@ export default function App(){
   const [obstacleWarning,setObstacleWarning]=useState('');
   const [passengers,setPassengers]=useState(1),[ac,setAc]=useState(false),[cargo,setCargo]=useState(0);
   const [redProbability,setRedProbability]=useState(0.5);
+  const [originText,setOriginText]=useState(''),[destText,setDestText]=useState('');
+  const [places,setPlaces]=useState<Place[]>([]);
+  const [placeTarget,setPlaceTarget]=useState<'origin'|'destination'>('origin');
+  const [geocodeBusy,setGeocodeBusy]=useState(false);
   const [error,setError]=useState(''),[busy,setBusy]=useState(false);
 
   useEffect(()=>{
@@ -154,6 +159,27 @@ export default function App(){
     if(m.isStyleLoaded())update();else m.once('load',update);
   },[routes,selected]);
 
+  const choosePlace=(p:Place,target:'origin'|'destination')=>{
+    if(!within(p)){setError('نتیجه انتخابی خارج از محدوده تهران است.');return;}
+    if(target==='origin'){points.current.origin=p;setOrigin(p);setOriginText(p.label);}
+    else{points.current.destination=p;setDestination(p);setDestText(p.label);}
+    setRoutes([]);setPlaces([]);setError('');
+    map.current?.flyTo({center:[p.lon,p.lat],zoom:14});
+  };
+  const geocode=async(target:'origin'|'destination')=>{
+    const q=(target==='origin'?originText:destText).trim();
+    if(q.length<2)return;setPlaceTarget(target);setGeocodeBusy(true);setPlaces([]);setError('');
+    try{
+      const response=await fetch(API+'/api/v1/geocode/?q='+encodeURIComponent(q));
+      const body=await response.json() as {results?:Place[];error?:string};
+      if(!response.ok)throw new Error(body.error==='geocoder_not_configured'?
+        'جست‌وجوی آدرس روی سرور تنظیم نشده؛ از انتخاب نقطه روی نقشه استفاده کنید.':
+        'خدمات جست‌وجوی آدرس در دسترس نیست.');
+      setPlaces(body.results||[]);
+      if(!body.results?.length)setError('آدرسی در محدوده تهران پیدا نشد.');
+    }catch(e){setError(e instanceof Error?e.message:'خطا در جست‌وجو');}
+    finally{setGeocodeBusy(false);}
+  };
   const reset=()=>{points.current={origin:null,destination:null};
     setOrigin(null);setDestination(null);setRoutes([]);setError('');};
   const run=async()=>{
@@ -184,7 +210,22 @@ export default function App(){
         <small>تخمین پژوهشی مصرف بنزین پراید در تهران</small>
       </header>
       <section><h2><MapPin size={17}/> مبدأ و مقصد</h2>
-        <p>روی نقشه دو نقطه را به‌ترتیب انتخاب کنید. مختصات فقط برای محاسبه ارسال می‌شود.</p>
+        <p>روی نقشه دو نقطه را انتخاب کنید، یا آدرس را جست‌وجو کنید.</p>
+        <div className="geo-search"><label>جست‌وجوی مبدأ<input value={originText}
+          onChange={e=>setOriginText(e.target.value)}
+          onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();void geocode('origin');}}}
+          placeholder="مثلاً میدان آزادی"/></label>
+          <button disabled={geocodeBusy||originText.trim().length<2}
+            onClick={()=>void geocode('origin')}>جست‌وجو</button></div>
+        <div className="geo-search"><label>جست‌وجوی مقصد<input value={destText}
+          onChange={e=>setDestText(e.target.value)}
+          onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();void geocode('destination');}}}
+          placeholder="مثلاً میدان تجریش"/></label>
+          <button disabled={geocodeBusy||destText.trim().length<2}
+            onClick={()=>void geocode('destination')}>جست‌وجو</button></div>
+        {places.length>0&&<div className="place-results" role="listbox">
+          {places.map((p,i)=><button key={i} onClick={()=>choosePlace(p,placeTarget)}>{p.label}</button>)}
+        </div>}
         <div className="point">مبدأ: {origin?origin.lat.toFixed(4)+'، '+origin.lon.toFixed(4):'انتخاب نشده'}</div>
         <div className="point">مقصد: {destination?destination.lat.toFixed(4)+'، '+destination.lon.toFixed(4):'انتخاب نشده'}</div>
         <button className="text-button" onClick={reset}><RotateCcw size={14}/> شروع دوباره</button>
