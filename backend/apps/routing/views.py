@@ -13,7 +13,8 @@ from rest_framework.views import APIView
 
 from apps.geo.models import Obstacle
 from domain.elevation import ElevationClient, ElevationError, uniform_positions, terrain_from_elevations, apply_terrain
-from domain.fuel import VehicleParameters, baseline_liters, estimate_physics
+from domain.fuel import baseline_liters, estimate_physics
+from domain.vehicle_specs import research_vehicle
 from domain.motion import RequiredSlowdown, RequiredStop, simulate_motion
 from domain.route_factors import ObstaclePoint, match_obstacles
 from .osrm import OsrmClient, RoutingError
@@ -98,11 +99,11 @@ class EstimateView(APIView):
             log.warning('routing.error code=%s',str(exc))
             return Response({'error':str(exc)},status=503 if str(exc)=='routing_provider_unavailable' else 422)
         if not routes:return Response({'error':'no_route'},status=422)
-        # Engineering hypotheses; these are NOT laboratory-calibrated Pride engine coefficients.
-        params=VehicleParameters(mass_kg=915+75*data['passengers']+data['cargo_kg'],
-            cd=0.35,frontal_area_m2=1.85,rolling_resistance=.013,
-            drivetrain_efficiency=.86,engine_efficiency=.19,
-            idle_lph=.75+(.20 if data['ac_on'] else 0),reference_urban_l100=9.5)
+        # Vehicle coefficients come from a replaceable versioned research preset.
+        spec=research_vehicle('pride-131')
+        params=spec.parameterize(
+            passengers=data['passengers'],
+            cargo_kg=data['cargo_kg'],ac_on=data['ac_on'])
         history=None
         if data['save_history']:
             # Explicit opt-in: anonymous coordinates are never stored.
@@ -147,7 +148,7 @@ class EstimateView(APIView):
                 stored=RoutePrediction.objects.create(request=history,
                     geometry=LineString(*route.coordinates,srid=4326),
                     distance_m=route.distance_m,duration_s=route.duration_s,
-                    baseline_l=baseline_liters(route.distance_m,9.5),
+                    baseline_l=baseline_liters(route.distance_m,spec.urban_reference_l100),
                     estimated_l=liters,idle_l=idle_l,propulsion_l=traction_l,
                     model_version=green.model_version,warnings=warnings,
                     assumptions={'physics_uncalibrated':True,
@@ -178,5 +179,6 @@ class EstimateView(APIView):
                 'warnings':list(dict.fromkeys(warnings)),
                 'model_version':green.model_version})
         return Response({'vehicle':'pride-131','scope':'tehran','routes':response,
+            'vehicle_assumptions':spec.public_assumptions(),
             'research_only':True,'data_quality':'partially_observed',
             'note':'Fuel values are uncalibrated research estimates, not measured consumption.'})
