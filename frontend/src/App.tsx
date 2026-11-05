@@ -17,7 +17,11 @@ type Route = {
   terrain:{ascent_m:number;descent_m:number}|null;
   model_version:string;geometry:{type:'LineString';coordinates:number[][]}
 };
-type EstimateResponse={routes:Route[];research_only:boolean};
+type VehicleAssumptions={
+  coefficient_status:string;curb_mass_kg:number;assumed_mass_per_person_kg:number;
+  reference_urban_l100:number;cd_hypothesis:number;engine_efficiency_hypothesis:number;
+};
+type EstimateResponse={routes:Route[];research_only:boolean;vehicle_assumptions?:VehicleAssumptions};
 const API=import.meta.env.VITE_API_BASE_URL || '';
 const TEHRAN:[number,number]=[51.389,35.6892];
 const LIMIT={minLon:51.05,maxLon:51.75,minLat:35.45,maxLat:35.95};
@@ -48,6 +52,7 @@ export default function App(){
   const sessionRef=useRef<SessionInfo>({authenticated:false,username:'',staff:false,signup_enabled:false});
   const [origin,setOrigin]=useState<Point|null>(null),[destination,setDestination]=useState<Point|null>(null);
   const [routes,setRoutes]=useState<Route[]>([]),[selected,setSelected]=useState(0);
+  const [vehicleAssumptions,setVehicleAssumptions]=useState<VehicleAssumptions|null>(null);
   const [obstacles,setObstacles]=useState<Obstacle[]>([]);
   const [obstacleWarning,setObstacleWarning]=useState('');
   const reportMode=useRef(false);
@@ -313,9 +318,9 @@ export default function App(){
     finally{setGeocodeBusy(false);}
   };
   const reset=()=>{points.current={origin:null,destination:null};
-    setOrigin(null);setDestination(null);setRoutes([]);setError('');};
+    setOrigin(null);setDestination(null);setRoutes([]);setVehicleAssumptions(null);setError('');};
   const run=async()=>{
-    if(!origin||!destination)return;setBusy(true);setError('');setRoutes([]);
+    if(!origin||!destination)return;setBusy(true);setError('');setRoutes([]);setVehicleAssumptions(null);
     try{
       const response=await fetch(API+'/api/v1/estimates/',{
         method:'POST',headers:{'Content-Type':'application/json'},
@@ -329,6 +334,7 @@ export default function App(){
         body.error||'خطا در تخمین مسیر');
       if(!body.routes?.length)throw new Error('مسیر قابل محاسبه‌ای دریافت نشد.');
       setRoutes(body.routes);
+      setVehicleAssumptions(body.vehicle_assumptions??null);
       setSelected(body.routes.reduce((best,item,index,all)=>
         item.estimated_l<all[best].estimated_l?index:best,0));
     }catch(e){setError(e instanceof Error?e.message:'خطای ارتباط با سرور');}
@@ -455,6 +461,15 @@ export default function App(){
           <div><small>مصرف درجا</small><strong>{faNum(active.idle_l,3)} L</strong></div>
           <div><small>مصرف محرکه</small><strong>{faNum(active.propulsion_l,3)} L</strong></div>
         </div>
+        {vehicleAssumptions&&<>
+          <h3><CarFront size={16}/> فرض‌های علمی پراید</h3>
+          <p>وزن خالی {faNum(vehicleAssumptions.curb_mass_kg,0)} کیلوگرم؛
+             وزن فرضی هر سرنشین {faNum(vehicleAssumptions.assumed_mass_per_person_kg,0)} کیلوگرم؛
+             مصرف شهری مرجع {faNum(vehicleAssumptions.reference_urban_l100,1)} لیتر در ۱۰۰ کیلومتر.</p>
+          <p>ضریب مقاومت هوا ({faNum(vehicleAssumptions.cd_hypothesis,2)}) و
+             بازده موتور ({faNum(vehicleAssumptions.engine_efficiency_hypothesis*100,0)}٪)
+             فرض‌های پژوهشی‌اند و با آزمایش پراید واقعی تأیید نشده‌اند.</p>
+        </>}
         <h3><TrafficCone size={16}/> شواهد موانع</h3>
         <p>نزدیک مسیر: {faNum(active.obstacle_summary.nearby,0)} مورد ·
           تأییدشده دستی: {faNum(active.obstacle_summary.reviewed_applied,0)} مورد ·
