@@ -38,7 +38,7 @@ class LogsView(APIView):
         level = request.query_params.get('level', 'error').lower()
         if level not in ('error','warning','info','debug'):
             return Response({'error':'invalid_level'},status=400)
-        query = '{service="rahsu-api"} | json | level="'+level.upper()+'"'
+        query = '{service="api"} | json | level="'+level.upper()+'"'
         from django.conf import settings
         try:
             with httpx.Client(timeout=4.0) as client:

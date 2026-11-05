@@ -7,4 +7,4 @@
 - Docker socket mount to Alloy is privileged; protect host access or replace docker autodiscovery with a safer log forwarder in production.
 - No auto-scaling, long-term backups, real traffic, real obstacle extraction, or production-ready alert routing is claimed in the prototype.
 - Monitoring baseline still needs hardening, tested backups, operational metrics, tracing export, and dashboard alert thresholds.
-- `/api/v1/health/live` is a liveness endpoint; Prometheus needs a real `/metrics` exporter before metric collection is operational.
+- `/metrics/` provides a Prometheus exporter on the private API network. Do not expose it publicly without authentication/network restrictions.
