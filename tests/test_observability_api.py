@@ -1,7 +1,8 @@
-import pytest
-pytestmark=pytest.mark.django_db
 from unittest.mock import patch
+import pytest
 from rest_framework.test import APIClient
+
+pytestmark=pytest.mark.django_db
 
 def test_log_proxy_requires_token(settings):
     r=APIClient().get('/api/v1/admin/observability/logs')
