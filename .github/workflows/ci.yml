@@ -32,3 +32,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: cp .env.example .env && docker compose config --quiet
+
+  postgis:
+    runs-on: ubuntu-24.04
+    env:
+      DJANGO_DEBUG: "1"
+      DJANGO_SECRET_KEY: ci-only-dummy-key
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: rahsu
+      POSTGRES_USER: rahsu
+      POSTGRES_PASSWORD: test-only-password
+    services:
+      postgis:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: rahsu
+          POSTGRES_USER: rahsu
+          POSTGRES_PASSWORD: test-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rahsu -d rahsu"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: {python-version: '3.12'}
+      - run: sudo apt-get update && sudo apt-get install -y libgdal-dev libgeos-dev libproj-dev
+      - run: uv sync --extra dev
+      - run: cd backend && uv run --project .. python manage.py migrate --noinput
+      - run: cd backend && uv run --project .. python manage.py check
+      - run: cd backend && uv run --project .. python manage.py makemigrations --check --dry-run
