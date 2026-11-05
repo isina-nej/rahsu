@@ -15,10 +15,10 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with: {python-version: '3.12'}
       - run: sudo apt-get update && sudo apt-get install -y libgdal-dev libgeos-dev libproj-dev
-      - run: uv sync --extra dev
+      - run: uv sync --extra dev --extra science
       - run: uv run --extra dev ruff check --select E4,E9,F63,F7,F82 backend tests
       - run: bash -n scripts/*.sh
-      - run: uv run --extra dev pytest -q --ignore=tests/test_estimate_api.py --ignore=tests/test_moderation_api.py --ignore=tests/test_calibration_api.py --ignore=tests/test_auth_api.py --ignore=tests/test_privacy_api.py
+      - run: uv run --extra dev --extra science pytest -q --ignore=tests/test_estimate_api.py --ignore=tests/test_moderation_api.py --ignore=tests/test_calibration_api.py --ignore=tests/test_auth_api.py --ignore=tests/test_privacy_api.py
   frontend:
     runs-on: ubuntu-24.04
     defaults: {run: {working-directory: frontend}}
