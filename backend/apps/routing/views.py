@@ -53,7 +53,8 @@ def _nearby_obstacles(route) -> list[ObstaclePoint]:
     box=Polygon.from_bbox(bounds)
     rows=Obstacle.objects.filter(location__bboverlaps=box).exclude(source='removed').order_by('id')[:8000]
     return [ObstaclePoint(x.pk,x.kind,x.location.x,x.location.y,
-            x.verified,x.road_name,x.direction,x.source) for x in rows]
+            x.verified,x.road_name,x.direction,x.source,x.osm_type,x.osm_id)
+            for x in rows]
 
 
 def _terrain(route):
@@ -115,7 +116,7 @@ class EstimateView(APIView):
         for i,route in enumerate(routes[:3]):
             if not 0<route.distance_m<=100_000 or route.duration_s>36_000:continue
             projected=match_obstacles(route.coordinates,route.distance_m,route.road_steps,
-                                      _nearby_obstacles(route))
+                                      _nearby_obstacles(route),route_osm_nodes=route.osm_node_ids)
             applied=[x for x in projected if x.usable_for_fuel and 2<x.at_m<route.distance_m-2]
             hard_stops=tuple(RequiredStop(x.at_m,2.0) for x in applied if x.kind=='stop')
             red_signals=tuple(RequiredStop(x.at_m,20.0) for x in applied if x.kind=='traffic_signals')
@@ -132,8 +133,10 @@ class EstimateView(APIView):
             liters=green.liters*(1-prob)+red.liters*prob
             idle_l=green.idle_liters*(1-prob)+red.idle_liters*prob
             traction_l=green.propulsion_liters*(1-prob)+red.propulsion_liters*prob
+            auto_applied=sum(x.reason=='osm_node_on_traversed_route' for x in applied)
             warnings=[*green.warnings,*terrain_warnings,'traffic_not_live',
-                      'unreviewed_osm_not_applied','manual_obstacle_matching_is_conservative']
+                      'osm_signals_stops_require_direction_review',
+                      'manual_obstacle_matching_is_conservative']
             if red_signals:
                 warnings.append('signal_red_probability_is_assumed')
             else:
@@ -149,6 +152,7 @@ class EstimateView(APIView):
                     assumptions={'physics_uncalibrated':True,
                         'terrain_available':terrain is not None,
                         'applied_obstacles':len(applied),
+                        'topology_matched_osm_calming':auto_applied,
                         'signal_red_probability':prob})
                 prediction_id=stored.pk
             response.append({
@@ -160,7 +164,8 @@ class EstimateView(APIView):
                 'estimated_l':round(liters,4),'estimated_range_l':[round(min(green.liters,red.liters),4),
                                                                   round(max(green.liters,red.liters),4)],
                 'idle_l':round(idle_l,4),'propulsion_l':round(traction_l,4),
-                'obstacle_summary':{'nearby':len(projected),'reviewed_applied':len(applied),
+                'obstacle_summary':{'nearby':len(projected),'reviewed_applied':len(applied)-auto_applied,
+                  'topology_matched_osm_calming':auto_applied,'total_applied':len(applied),
                   'signals_scenario':len(red_signals),'stops':len(hard_stops),
                   'slowdowns':len(slows)},
                 'obstacles':[{'id':x.id,'kind':x.kind,'at_m':round(x.at_m,1),

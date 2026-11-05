@@ -13,6 +13,7 @@ class RouteCandidate:
     duration_s: float
     coordinates: tuple[tuple[float, float], ...]
     road_steps: tuple[RoadStep, ...] = ()
+    osm_node_ids: tuple[int, ...] = ()
 
 class OsrmClient:
     def __init__(self, base_url: str, timeout_s: float = 8.0):
@@ -23,7 +24,7 @@ class OsrmClient:
         coords = f"{origin[1]},{origin[0]};{dest[1]},{dest[0]}"
         try:
             response = httpx.get(self.base_url+"/route/v1/driving/"+coords,
-                    params={"alternatives":"true","overview":"full","geometries":"geojson","steps":"true"},
+                    params={"alternatives":"true","overview":"full","geometries":"geojson","steps":"true","annotations":"nodes"},
                     timeout=self.timeout_s)
             response.raise_for_status()
             data = response.json()
@@ -48,7 +49,16 @@ class OsrmClient:
                         coordinates = step.get("geometry",{}).get("coordinates",[])
                         if name and len(coordinates) >= 2:
                             steps.append(RoadStep(str(name),tuple(tuple(map(float,xy)) for xy in coordinates)))
-                candidates.append(RouteCandidate(distance,duration,coords_geo,tuple(steps)))
+                # OSRM annotation.nodes are exact 64-bit OpenStreetMap node IDs.
+                # Never treat a malformed/missing annotation as topology evidence.
+                node_ids=[]
+                for leg in item.get("legs",[]):
+                    annotation=leg.get("annotation") or {}
+                    raw=annotation.get("nodes",[]) if isinstance(annotation,dict) else []
+                    if isinstance(raw,list) and len(raw)<=20_000:
+                        node_ids.extend(n for n in raw if type(n) is int and n>0)
+                candidates.append(RouteCandidate(distance,duration,coords_geo,
+                                                tuple(steps),tuple(dict.fromkeys(node_ids))))
             except (TypeError,ValueError,KeyError):
                 continue
         return candidates

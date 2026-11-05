@@ -26,6 +26,8 @@ class ObstaclePoint:
     road_name: str = ""
     direction: str = "unknown"
     source: str = "osm"
+    osm_type: str = ""
+    osm_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -74,13 +76,17 @@ def match_obstacles(
     road_steps: tuple[RoadStep, ...],
     obstacles: list[ObstaclePoint],
     max_offset_m: float = 12.0,
+    route_osm_nodes: tuple[int, ...] = (),
 ) -> list[ProjectedObstacle]:
-    """Only confirmed road-name + bidirectional reviewed records may affect fuel.
+    """Topology-match OSM calming nodes; review directional traffic controls.
 
-    Even when that gate passes the result is a *modeled* stop/slowdown, not a
-    measurement. Actual OSM nodes are always display-only until reviewed.
+    Automatic OSM bump/hump slowdown is eligible ONLY when the route really
+    traverses the same OSM node ID and the geographic offset is plausible.
+    Signals, stop signs and crossings remain evidence-only until reviewed;
+    passing a shared intersection node alone does not prove the approach.
     """
     projected: list[ProjectedObstacle] = []
+    traversed = set(route_osm_nodes)
     for ob in obstacles:
         offset, along, length = project_point((ob.lon, ob.lat), route)
         if offset > max_offset_m or not length:
@@ -94,12 +100,20 @@ def match_obstacles(
                 if step_offset <= max_offset_m:
                     on_named_step = True
                     break
-        usable = bool(ob.verified and ob.source == "manual"
-                      and ob.direction == "both" and on_named_step)
-        if usable:
+        auto_calming = bool(
+            ob.source == "osm" and ob.kind in ("bump", "hump")
+            and ob.osm_type == "node" and ob.osm_id is not None
+            and ob.osm_id in traversed
+        )
+        reviewed = bool(ob.verified and ob.source == "manual"
+                        and ob.direction == "both" and on_named_step)
+        usable = auto_calming or reviewed
+        if auto_calming:
+            reason = "osm_node_on_traversed_route"
+        elif reviewed:
             reason = "reviewed_named_road_bidirectional"
         elif not ob.verified:
-            reason = "not_reviewed"
+            reason = "not_reviewed_or_not_on_traversed_osm_nodes"
         else:
             reason = "road_or_direction_not_confirmed"
         projected.append(ProjectedObstacle(
