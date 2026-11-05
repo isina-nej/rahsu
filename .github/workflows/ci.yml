@@ -18,7 +18,7 @@ jobs:
       - run: uv sync --extra dev --extra science
       - run: uv run --extra dev ruff check --select E4,E9,F63,F7,F82 backend tests
       - run: bash -n scripts/*.sh
-      - run: uv run --extra dev --extra science pytest -q --ignore=tests/test_estimate_api.py --ignore=tests/test_moderation_api.py --ignore=tests/test_calibration_api.py --ignore=tests/test_auth_api.py --ignore=tests/test_privacy_api.py --ignore=tests/test_ops_audit.py
+      - run: uv run --extra dev --extra science pytest -q --ignore=tests/test_estimate_api.py --ignore=tests/test_moderation_api.py --ignore=tests/test_calibration_api.py --ignore=tests/test_auth_api.py --ignore=tests/test_privacy_api.py --ignore=tests/test_ops_audit.py --ignore=tests/test_observability_api.py
   frontend:
     runs-on: ubuntu-24.04
     defaults: {run: {working-directory: frontend}}
@@ -67,4 +67,4 @@ jobs:
       - run: cd backend && uv run --project .. python manage.py migrate --noinput
       - run: cd backend && uv run --project .. python manage.py check
       - run: cd backend && uv run --project .. python manage.py makemigrations --check --dry-run
-      - run: uv run --extra dev pytest -q tests/test_estimate_api.py tests/test_moderation_api.py tests/test_calibration_api.py tests/test_auth_api.py tests/test_privacy_api.py tests/test_ops_audit.py
+      - run: uv run --extra dev pytest -q tests/test_estimate_api.py tests/test_moderation_api.py tests/test_calibration_api.py tests/test_auth_api.py tests/test_privacy_api.py tests/test_ops_audit.py tests/test_observability_api.py

@@ -1,3 +1,5 @@
+import pytest
+pytestmark=pytest.mark.django_db
 from unittest.mock import patch
 from rest_framework.test import APIClient
 
