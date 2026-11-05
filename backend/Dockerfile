@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libgdal-dev lib
 COPY pyproject.toml .
 COPY backend ./backend
 RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir .
+RUN DJANGO_DEBUG=1 DJANGO_SECRET_KEY=build-only-ignore python backend/manage.py collectstatic --noinput
 RUN groupadd -r app && useradd -r -g app app && chown -R app:app /app
 USER app
 WORKDIR /app/backend

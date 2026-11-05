@@ -19,6 +19,7 @@ INSTALLED_APPS = [
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -54,7 +55,8 @@ LANGUAGE_CODE = "fa-ir"
 TIME_ZONE = "Asia/Tehran"
 USE_I18N = True
 USE_TZ = True
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
+STORAGES = {"staticfiles":{"BACKEND":"whitenoise.storage.CompressedManifestStaticFilesStorage"}}
 STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CORS_ALLOWED_ORIGINS = [x.strip() for x in os.getenv("DJANGO_CORS_ORIGINS", "http://localhost:5173").split(",") if x.strip()]
@@ -88,3 +90,14 @@ LOGGING = {"version": 1, "disable_existing_loggers": False,
            "formatters": {"json": {"()": "apps.operations.logging.JsonFormatter"}},
            "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "json"}},
            "root": {"handlers": ["console"], "level": os.getenv("LOG_LEVEL", "INFO")}}
+
+# Shared Redis cache makes geocoder throttling work across Gunicorn workers.
+if os.getenv("REDIS_URL"):
+    CACHES={"default":{"BACKEND":"django.core.cache.backends.redis.RedisCache",
+                      "LOCATION":os.environ["REDIS_URL"]}}
+CSRF_TRUSTED_ORIGINS = [x.strip() for x in os.getenv(
+    "DJANGO_CSRF_TRUSTED_ORIGINS",
+    "http://localhost:5173,http://localhost:8080").split(",") if x.strip()]
+# Trust forwarded HTTPS only when the app is behind an operator-managed proxy.
+if os.getenv("TRUST_REVERSE_PROXY") == "1":
+    SECURE_PROXY_SSL_HEADER=("HTTP_X_FORWARDED_PROTO","https")
