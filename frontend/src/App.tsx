@@ -35,7 +35,6 @@ const warnings:Record<string,string>={
 };
 const faNum=(num:number,digits=1)=>num.toLocaleString('fa-IR',{maximumFractionDigits:digits,minimumFractionDigits:digits});
 const typeColor=(o:Obstacle)=>o.verified?'#1b866c':'#ee973a';
-const EMPTY={type:'FeatureCollection' as const,features:[]};
 const within=(p:Point)=>p.lat>=LIMIT.minLat&&p.lat<=LIMIT.maxLat&&p.lon>=LIMIT.minLon&&p.lon<=LIMIT.maxLon;
 
 export default function App(){
