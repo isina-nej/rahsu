@@ -25,7 +25,18 @@ class ObstacleReport(models.Model):
     kind = models.CharField(max_length=32)
     location = models.PointField(srid=4326, geography=True)
     note = models.TextField(max_length=1000, blank=True)
+    road_name = models.CharField(max_length=180, blank=True)
+    direction = models.CharField(max_length=16, default='unknown')
     status = models.CharField(max_length=12, choices=STATUS, default='pending')
     reviewer = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name='reviewed_reports', on_delete=models.SET_NULL)
     reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class ObstacleRevision(models.Model):
+    """Immutable moderator decision snapshot to support attribution/rollback."""
+    report = models.OneToOneField(ObstacleReport,on_delete=models.PROTECT)
+    obstacle = models.ForeignKey(Obstacle,null=True,on_delete=models.SET_NULL)
+    reviewer = models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    before = models.JSONField(default=dict)
+    after = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -25,7 +25,7 @@ class Command(BaseCommand):
         created = updated = skipped = 0
         for item in parsed:
             existing = Obstacle.objects.filter(osm_type='node',osm_id=item.osm_id).first()
-            if existing and (existing.verified or existing.source == 'manual'):
+            if existing and (existing.verified or existing.source in ('manual','removed')):
                 skipped += 1
                 continue
             obj, was_created = Obstacle.objects.update_or_create(
