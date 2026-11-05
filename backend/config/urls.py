@@ -5,6 +5,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from apps.geo.views import ObstacleListView, ObstacleReportView, ModerateReportsView
 from apps.operations.views import LiveView, ReadyView, LogsView, VersionView, MetricsSummaryView, TraceView, AuditAccessView
 from apps.operations.views_metrics import MetricsView
+from apps.operations.readiness import DataReadinessView
 from apps.routing.views import EstimateView
 from apps.vehicles.views import VehicleListView
 from apps.calibration.views import ObservedTripView, HoldoutMetricsView
@@ -36,6 +37,7 @@ urlpatterns = [
     path("api/v1/admin/obstacle-reports/", ModerateReportsView.as_view()),
     path("api/v1/admin/observability/logs", LogsView.as_view()),
     path("api/v1/admin/observability/audit", AuditAccessView.as_view()),
+    path("api/v1/admin/observability/readiness", DataReadinessView.as_view()),
     path("api/v1/admin/observability/metrics/summary", MetricsSummaryView.as_view()),
     path("api/v1/admin/observability/traces/<str:trace_id>", TraceView.as_view()),
 ]
