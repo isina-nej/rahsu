@@ -8,16 +8,40 @@ from .review import decide_report
 
 class ObstacleListView(APIView):
     permission_classes=[AllowAny]
+
     def get(self, request):
-        try:
-            lat=float(request.query_params['lat']);lon=float(request.query_params['lon'])
-            radius=min(max(float(request.query_params.get('radius_m','500')),100),3000)
-            if not (35.45<=lat<=35.95 and 51.05<=lon<=51.75):raise ValueError()
-        except (KeyError,ValueError,TypeError):
-            return Response({'error':'provide_valid_tehran_lat_lon'},status=400)
+        from django.contrib.gis.geos import Polygon
         from django.contrib.gis.measure import D
-        rows=Obstacle.objects.exclude(source='removed').filter(location__distance_lte=(Point(lon,lat,srid=4326),D(m=radius)))[:200]
-        return Response({'results':[{'id':x.pk,'kind':x.kind,'lon':x.location.x,'lat':x.location.y,'source':x.source,'verified':x.verified} for x in rows]})
+        from math import isfinite
+        try:
+            if 'bbox' in request.query_params:
+                bbox=list(map(float,request.query_params['bbox'].split(',')))
+                if len(bbox)!=4 or any(not isfinite(x) for x in bbox):
+                    raise ValueError
+                minlon,minlat,maxlon,maxlat=bbox
+                if not(51.05<=minlon<maxlon<=51.75 and
+                       35.45<=minlat<maxlat<=35.95 and
+                       (maxlon-minlon)*(maxlat-minlat)<=0.18):
+                    raise ValueError
+                polygon=Polygon.from_bbox(tuple(bbox))
+                qs=Obstacle.objects.exclude(source='removed').filter(location__bboverlaps=polygon)
+            else:
+                lat=float(request.query_params['lat'])
+                lon=float(request.query_params['lon'])
+                radius=float(request.query_params.get('radius_m','500'))
+                if not (all(isfinite(x) for x in (lat,lon,radius))
+                       and 35.45<=lat<=35.95 and 51.05<=lon<=51.75):
+                    raise ValueError
+                radius=min(max(radius,100),3000)
+                qs=Obstacle.objects.exclude(source='removed').filter(
+                    location__distance_lte=(Point(lon,lat,srid=4326),D(m=radius)))
+        except (KeyError,ValueError,TypeError):
+            return Response({'error':'provide_valid_tehran_bounds'},status=400)
+        rows=list(qs.order_by('id')[:1001])
+        return Response({'results':[{'id':x.pk,'kind':x.kind,
+            'lon':x.location.x,'lat':x.location.y,'source':x.source,
+            'verified':x.verified,'road_name':x.road_name}
+            for x in rows[:1000]],'truncated':len(rows)>1000})
 
 class ReportSerializer(serializers.Serializer):
     action=serializers.ChoiceField(choices=['add','correct','remove'])
