@@ -36,7 +36,10 @@ class OsrmClient:
             try:
                 coords_geo = tuple(tuple(map(float, xy)) for xy in item["geometry"]["coordinates"])
                 distance, duration = float(item["distance"]), float(item["duration"])
-                if len(coords_geo) < 2 or not all(isfinite(x) for x in (distance,duration)) or distance <= 0 or duration <= 0:
+                if (not 2<=len(coords_geo)<=10000 or not all(isfinite(x) for x in (distance,duration))
+                    or distance <= 0 or duration <= 0
+                    or any(len(xy)!=2 or not all(isfinite(x) for x in xy) for xy in coords_geo)):
+
                     continue
                 steps=[]
                 for leg in item.get("legs",[]):

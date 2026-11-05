@@ -35,6 +35,15 @@ class EstimateSerializer(serializers.Serializer):
     signal_red_probability = serializers.FloatField(default=0.5,min_value=0,max_value=1)
     save_history = serializers.BooleanField(default=False)
 
+    def validate(self,attrs):
+        from math import isfinite
+        coordinates=[attrs['origin']['lat'],attrs['origin']['lon'],
+                     attrs['destination']['lat'],attrs['destination']['lon']]
+        measures=[attrs['cargo_kg'],attrs['signal_red_probability']]
+        if not all(isfinite(float(x)) for x in (*coordinates,*measures)):
+            raise serializers.ValidationError('non_finite_input')
+        return attrs
+
 
 def _nearby_obstacles(route) -> list[ObstaclePoint]:
     """PostGIS index bbox prefilter; conservative exact match happens in domain."""
