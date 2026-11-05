@@ -5,6 +5,7 @@ import { AlertTriangle, CarFront, CheckCircle2, Fuel, MapPin, RotateCcw, ShieldC
 
 type Point = {lat:number;lon:number};
 type SessionInfo={authenticated:boolean;username:string;staff:boolean;signup_enabled:boolean};
+type PendingReport={id:number;action:string;kind:string;lat:number;lon:number;road_name:string;direction:string;status:string;note:string};
 type Place = Point & {label:string};
 type Obstacle = {id:number;kind:string;lon:number;lat:number;source:string;verified:boolean;road_name:string};
 type Route = {
@@ -43,14 +44,26 @@ export default function App(){
   const mapNode=useRef<HTMLDivElement>(null);
   const map=useRef<MapType|null>(null);
   const points=useRef<{origin:Point|null;destination:Point|null}>({origin:null,destination:null});
+  const sessionRef=useRef<SessionInfo>({authenticated:false,username:'',staff:false,signup_enabled:false});
   const [origin,setOrigin]=useState<Point|null>(null),[destination,setDestination]=useState<Point|null>(null);
   const [routes,setRoutes]=useState<Route[]>([]),[selected,setSelected]=useState(0);
   const [obstacles,setObstacles]=useState<Obstacle[]>([]);
   const [obstacleWarning,setObstacleWarning]=useState('');
+  const reportMode=useRef(false);
+  const [reportPoint,setReportPoint]=useState<Point|null>(null);
+  const [reportObstacleId,setReportObstacleId]=useState<number|null>(null);
+  const [reportAction,setReportAction]=useState('add');
+  const [reportKind,setReportKind]=useState('bump');
+  const [reportRoad,setReportRoad]=useState('');
+  const [reportDirection,setReportDirection]=useState('unknown');
+  const [reportNote,setReportNote]=useState('');
+  const [reportMessage,setReportMessage]=useState('');
+  const [pendingReports,setPendingReports]=useState<PendingReport[]>([]);
   const [passengers,setPassengers]=useState(1),[ac,setAc]=useState(false),[cargo,setCargo]=useState(0);
   const [redProbability,setRedProbability]=useState(0.5);
   const [saveHistory,setSaveHistory]=useState(false);
   const [session,setSession]=useState<SessionInfo>({authenticated:false,username:'',staff:false,signup_enabled:false});
+  useEffect(()=>{sessionRef.current=session;},[session]);
   const [username,setUsername]=useState(''),[password,setPassword]=useState('');
   const [authBusy,setAuthBusy]=useState(false),[authError,setAuthError]=useState('');
   const [observedFuel,setObservedFuel]=useState(''),[observedDistance,setObservedDistance]=useState('');
@@ -155,6 +168,11 @@ export default function App(){
       if(m.getLayer('obstacles')&&m.queryRenderedFeatures(ev.point,{layers:['obstacles']}).length)return;
       const p={lat:ev.lngLat.lat,lon:ev.lngLat.lng};
       if(!within(p)){setError('لطفاً نقطه‌ای در محدوده تهران انتخاب کنید.');return;}
+      if(reportMode.current){
+        reportMode.current=false;setReportPoint(p);setReportObstacleId(null);
+        setReportAction('add');setReportMessage('محل مانع انتخاب شد.');
+        return;
+      }
       setError('');setRoutes([]);
       const next=points.current.origin&&!points.current.destination?'destination':'origin';
       if(next==='origin'){
@@ -164,6 +182,11 @@ export default function App(){
     m.on('click','obstacles',(ev)=>{
       const feature=ev.features?.[0];if(!feature||feature.geometry.type!=='Point')return;
       const p=feature.properties||{};
+      if(sessionRef.current.authenticated){
+        setReportPoint({lat:feature.geometry.coordinates[1],lon:feature.geometry.coordinates[0]});
+        setReportObstacleId(Number(p.id));setReportAction('correct');
+        setReportKind(String(p.kind));setReportMessage('مانع روی نقشه انتخاب شد؛ اصلاح یا حذف را مشخص کنید.');
+      }
       new maplibregl.Popup({closeButton:true}).setLngLat(feature.geometry.coordinates as [number,number])
         .setText((labels[String(p.kind)]||'مانع')+' — '+(p.verified?'تأییدشده':'از نقشه، نیازمند بررسی'))
         .addTo(m);
@@ -230,6 +253,43 @@ export default function App(){
     if(m.isStyleLoaded())update();else m.once('load',update);
   },[routes,selected]);
 
+  const submitObstacle=async()=>{
+    if(!reportPoint||!session.authenticated){setReportMessage('ابتدا وارد حساب شوید و نقطه را مشخص کنید.');return;}
+    setReportMessage('');
+    try{
+      const token=await csrf();
+      const response=await fetch(API+'/api/v1/obstacle-reports/',{
+        method:'POST',credentials:'same-origin',
+        headers:{'Content-Type':'application/json','X-CSRFToken':token},
+        body:JSON.stringify({action:reportAction,kind:reportKind,lat:reportPoint.lat,
+          lon:reportPoint.lon,road_name:reportRoad,direction:reportDirection,
+          note:reportNote,...(reportAction==='add'?{}:{obstacle_id:reportObstacleId})})
+      });
+      const result=await response.json() as {error?:string};
+      if(!response.ok)throw new Error(result.error||'ارسال گزارش ناموفق بود');
+      setReportMessage('گزارش با موفقیت ثبت شد و در صف بررسی مدیر است.');
+      setReportPoint(null);setReportObstacleId(null);setReportNote('');
+    }catch(e){setReportMessage(e instanceof Error?e.message:'خطای ارسال');}
+  };
+  const refreshPending=async()=>{
+    try{
+      const response=await fetch(API+'/api/v1/admin/obstacle-reports/',{credentials:'same-origin'});
+      if(!response.ok)throw new Error('خطای دسترسی به گزارش‌ها');
+      const data=await response.json() as {results:PendingReport[]};
+      setPendingReports(data.results||[]);
+    }catch(e){setReportMessage(e instanceof Error?e.message:'خطای دریافت گزارش‌ها');}
+  };
+  const decidePending=async(id:number,decision:'approve'|'reject')=>{
+    try{
+      const token=await csrf();
+      const response=await fetch(API+'/api/v1/admin/obstacle-reports/',{
+        method:'PATCH',credentials:'same-origin',
+        headers:{'Content-Type':'application/json','X-CSRFToken':token},
+        body:JSON.stringify({id,decision})});
+      if(!response.ok)throw new Error('ثبت تصمیم مدیر ناموفق بود.');
+      await refreshPending();
+    }catch(e){setReportMessage(e instanceof Error?e.message:'خطا');}
+  };
   const choosePlace=(p:Place,target:'origin'|'destination')=>{
     if(!within(p)){setError('نتیجه انتخابی خارج از محدوده تهران است.');return;}
     if(target==='origin'){points.current.origin=p;setOrigin(p);setOriginText(p.label);}
@@ -296,6 +356,47 @@ export default function App(){
               onClick={()=>void signIn('register')}>ثبت‌نام</button>}
           </div>{authError&&<p role="alert" className="auth-error">{authError}</p>}</>}
     </section>
+    {session.authenticated&&<section className="obstacle-report">
+      <h2><TrafficCone size={17}/> اصلاح اطلاعات موانع</h2>
+      <p>برای گزارش مانع جدید «انتخاب محل» را بزنید و نقطه را روی نقشه مشخص کنید.
+        برای اصلاح مانع موجود، علامت آن را روی نقشه انتخاب کنید.</p>
+      <button className="text-button" onClick={()=>{reportMode.current=true;
+        setReportAction('add');setReportObstacleId(null);setReportPoint(null);
+        setReportMessage('روی نقشه محل مانع جدید را انتخاب کنید.');}}>انتخاب محل مانع جدید</button>
+      <p>محل: {reportPoint?reportPoint.lat.toFixed(5)+'، '+reportPoint.lon.toFixed(5):'هنوز انتخاب نشده'}</p>
+      {reportObstacleId&&<p>شناسه مانع انتخابی: {reportObstacleId}</p>}
+      <label>درخواست
+        <select value={reportAction} onChange={e=>setReportAction(e.target.value)}>
+          <option value="add">افزودن</option>
+          {reportObstacleId&&<option value="correct">اصلاح</option>}
+          {reportObstacleId&&<option value="remove">حذف</option>}
+        </select>
+      </label>
+      <label>نوع مانع
+        <select value={reportKind} onChange={e=>setReportKind(e.target.value)}>
+          {Object.entries(labels).map(([id,name])=><option key={id} value={id}>{name}</option>)}
+        </select>
+      </label>
+      <label>نام خیابان<input value={reportRoad} onChange={e=>setReportRoad(e.target.value)} placeholder="نام خیابان در نقشه"/></label>
+      <label>جهت اثر<select value={reportDirection} onChange={e=>setReportDirection(e.target.value)}>
+        <option value="unknown">نامشخص</option><option value="both">هر دو جهت (نیازمند بازبینی)</option>
+        <option value="forward">فقط یک جهت</option></select></label>
+      <label>توضیحات<input value={reportNote} onChange={e=>setReportNote(e.target.value)} maxLength={1000}/></label>
+      <button className="submit" disabled={!reportPoint||(reportAction!=='add'&&!reportObstacleId)}
+        onClick={()=>void submitObstacle()}>ثبت گزارش برای بازبینی</button>
+      {reportMessage&&<p role="status">{reportMessage}</p>}
+    </section>}
+    {session.staff&&<section className="moderation">
+      <h2><ShieldCheck size={17}/> صف بازبینی مدیر</h2>
+      <button className="text-button" onClick={()=>void refreshPending()}>دریافت گزارش‌های منتظر</button>
+      {pendingReports.map(item=><div className="moderation-item" key={item.id}>
+        <strong>#{item.id} · {labels[item.kind]||item.kind} · {item.action}</strong>
+        <p>{item.road_name||'نام خیابان نامشخص'} · {item.direction}</p>
+        <p>{item.note}</p>
+        <div className="auth-actions"><button onClick={()=>void decidePending(item.id,'approve')}>تأیید</button>
+          <button onClick={()=>void decidePending(item.id,'reject')}>رد</button></div>
+      </div>)}
+    </section>}
     <section><h2><MapPin size={17}/> مبدأ و مقصد</h2>
         <p>روی نقشه دو نقطه را انتخاب کنید، یا آدرس را جست‌وجو کنید.</p>
         <div className="geo-search"><label>جست‌وجوی مبدأ<input value={originText}
