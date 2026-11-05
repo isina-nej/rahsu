@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from django.db.models import F
 from .models import ObservedTrip
 from apps.routing.models import RoutePrediction
-from .metrics import fuel_error_metrics
+from .metrics import fuel_error_metrics, paired_model_comparison
 
 
 class TripSerializer(serializers.Serializer):
@@ -50,12 +50,47 @@ class ObservedTripView(APIView):
 
 class HoldoutMetricsView(APIView):
     permission_classes=[IsAdminUser]
+
     def get(self,request):
-        pairs=list(ObservedTrip.objects.filter(consent_given=True,
-          calibration_split='holdout',prediction__isnull=False).values_list(
-              'observed_fuel_l','prediction__estimated_l'))
-        if len(pairs)<5:
-            return Response({'status':'insufficient_holdout_trips','count':len(pairs),
-                'minimum':5,'metrics':None})
-        return Response({'status':'evaluated','scope':'holdout_only',
-            'metrics':fuel_error_metrics(pairs)})
+        # Evaluate only consented, held-out observations. Repeated submissions
+        # of the same prediction are not independent test examples.
+        rows=ObservedTrip.objects.filter(
+            consent_given=True,calibration_split='holdout',
+            prediction__isnull=False,
+        ).order_by('prediction_id','created_at','pk').values_list(
+            'prediction_id','observed_fuel_l','distance_m',
+            'prediction__distance_m','prediction__baseline_l',
+            'prediction__estimated_l')
+        paired=[]
+        seen=set()
+        duplicate=distance_mismatch=invalid=0
+        for prediction_id,observed,actual_m,planned_m,base,physics in rows:
+            if prediction_id in seen:
+                duplicate+=1
+                continue
+            seen.add(prediction_id)
+            if not planned_m or not .9<=actual_m/planned_m<=1.1:
+                distance_mismatch+=1
+                continue
+            if any(x is None or x<=0 for x in (observed,base,physics)):
+                invalid+=1
+                continue
+            paired.append((observed,base,physics))
+        selection={
+            'selected':len(paired),'distinct_predictions':len(seen),
+            'excluded_duplicate_predictions':duplicate,
+            'excluded_distance_mismatch':distance_mismatch,
+            'excluded_invalid':invalid,
+        }
+        if len(paired)<5:
+            return Response({'status':'insufficient_holdout_trips',
+                'count':len(paired),'minimum':5,'metrics':None,
+                'comparison':None,'selection':selection})
+        comparison=paired_model_comparison(paired)
+        return Response({
+            'status':'evaluated','scope':'holdout_only',
+            'metrics':comparison['physics'],  # Existing API field.
+            'comparison':comparison,'selection':selection,
+            'scientifically_validated':False,
+            'warning':'Exploratory holdout; driver independence and measured fuel quality still require verification.',
+        })
