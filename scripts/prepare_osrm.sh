@@ -4,7 +4,9 @@ set -euo pipefail
 # Usage: scripts/prepare_osrm.sh /path/to/tehran.osm.pbf
 PBF=${1:?Provide Tehran .osm.pbf}; test -f "$PBF"
 mkdir -p data/osrm
-cp "$PBF" data/osrm/tehran.osm.pbf
+if [[ "$(realpath "$PBF")" != "$(realpath -m data/osrm/tehran.osm.pbf)" ]]; then
+  cp "$PBF" data/osrm/tehran.osm.pbf
+fi
 IMAGE=ghcr.io/project-osrm/osrm-backend:latest
 # Containerized OSRM must be pinned to a verified digest for production use.
 docker run --rm -v "$PWD/data/osrm:/data" "$IMAGE" osrm-extract -p /opt/car.lua /data/tehran.osm.pbf
