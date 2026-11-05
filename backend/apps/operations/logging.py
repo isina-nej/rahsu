@@ -18,6 +18,13 @@ class JsonFormatter(logging.Formatter):
             'event': message,
             'request_id': request_id.get(),
         }
+        try:
+            from opentelemetry import trace
+            span = trace.get_current_span().get_span_context()
+            if span.is_valid:
+                event['trace_id'] = f'{span.trace_id:032x}'
+        except ImportError:
+            pass
         if record.exc_info:
             event['exception_class'] = record.exc_info[0].__name__
         return json.dumps(event, ensure_ascii=False)

@@ -15,7 +15,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
     "django.contrib.gis", "rest_framework", "drf_spectacular", "corsheaders",
     "apps.vehicles", "apps.geo", "apps.routing", "apps.fuel",
-    "apps.operations", "apps.calibration",
+    "apps.operations.apps.OperationsConfig", "apps.calibration",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

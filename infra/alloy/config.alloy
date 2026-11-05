@@ -22,3 +22,11 @@ loki.write "default" {
     url = "http://loki:3100/loki/api/v1/push"
   }
 }
+
+otelcol.receiver.otlp "rahsu" {
+  http { endpoint = "0.0.0.0:4318" }
+  output { traces = [otelcol.exporter.otlphttp.tempo.input] }
+}
+otelcol.exporter.otlphttp "tempo" {
+  client { endpoint = "http://tempo:4318" }
+}
