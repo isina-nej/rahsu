@@ -68,7 +68,7 @@ services:
     image: prom/prometheus:v3.2.1
     profiles: [monitoring]
     command: ["--config.file=/etc/prometheus/prometheus.yml"]
-    volumes: ["./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro","promdata:/prometheus"]
+    volumes: ["./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro","./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro","promdata:/prometheus"]
   grafana:
     image: grafana/grafana:11.5.2
     profiles: [monitoring]
@@ -76,7 +76,7 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
       GF_USERS_ALLOW_SIGN_UP: "false"
     ports: ["127.0.0.1:3000:3000"]
-    volumes: ["./infra/grafana/provisioning:/etc/grafana/provisioning:ro","grafanadata:/var/lib/grafana"]
+    volumes: ["./infra/grafana/provisioning:/etc/grafana/provisioning:ro","./infra/grafana/dashboards:/etc/grafana/dashboards:ro","grafanadata:/var/lib/grafana"]
 volumes:
   dbdata: {}
   redisdata: {}
