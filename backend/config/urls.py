@@ -3,7 +3,7 @@ from django.urls import path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from apps.geo.views import ObstacleListView, ObstacleReportView, ModerateReportsView
-from apps.operations.views import LiveView, ReadyView, LogsView, VersionView
+from apps.operations.views import LiveView, ReadyView, LogsView, VersionView, MetricsSummaryView, TraceView
 from apps.operations.views_metrics import MetricsView
 from apps.routing.views import EstimateView
 from apps.vehicles.views import VehicleListView
@@ -27,4 +27,6 @@ urlpatterns = [
     path("api/v1/obstacle-reports/", ObstacleReportView.as_view()),
     path("api/v1/admin/obstacle-reports/", ModerateReportsView.as_view()),
     path("api/v1/admin/observability/logs", LogsView.as_view()),
+    path("api/v1/admin/observability/metrics/summary", MetricsSummaryView.as_view()),
+    path("api/v1/admin/observability/traces/<str:trace_id>", TraceView.as_view()),
 ]

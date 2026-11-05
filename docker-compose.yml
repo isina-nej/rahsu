@@ -26,6 +26,8 @@ services:
       POSTGRES_HOST: db
       OSRM_BASE_URL: http://osrm:5000
       LOKI_BASE_URL: http://loki:3100
+      PROMETHEUS_BASE_URL: http://prometheus:9090
+      TEMPO_BASE_URL: http://tempo:3200
       REDIS_URL: redis://redis:6379/0
     depends_on:
       db: {condition: service_healthy}
@@ -69,6 +71,7 @@ services:
     volumes: ["./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro","promdata:/prometheus"]
   grafana:
     image: grafana/grafana:11.5.2
+    profiles: [monitoring]
     profiles: [monitoring]
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
