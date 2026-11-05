@@ -19,3 +19,27 @@
 - Opposite carriageway may share street name; human-confirmed direction still cannot replace a network-edge topology match in a production routing system.
 - Raw origin/destination coordinates are not sent to application logs.
 - This MVP does not guarantee the globally minimum-fuel route; only candidates returned by OSRM are compared.
+
+## Road-network topology via OSRM annotations
+
+When `annotations=nodes` is enabled, the OSRM Route API supplies OpenStreetMap
+node IDs traversed by each leg of a route (see
+https://project-osrm.org/docs/v26.6.1/http.html). These IDs are parsed as Python
+integers to preserve 64-bit identifiers.
+
+The current **automatic** obstacle rule applies only to:
+- OSM `node` with `traffic_calming=bump|hump|table`, imported with its OSM ID
+- Exactly matching `annotation.nodes` membership for this OSRM route
+- Confirmed nearby location within the 12m geometric tolerance
+
+Traffic signals, stop signs and crossings are displayed but not automatically
+treated as mandatory slowdowns: shared intersection nodes cannot determine the
+travel direction or the actual signal phase. Reviewed/manual obstacles remain
+subject to separate bidirectional street-name matching and are still a
+*conservative prototype*, not rigorous lane-level topology.
+
+The API reports `topology_matched_osm_calming` separately from
+`reviewed_applied` and `total_applied`. No guarantee of OSM completeness or
+per-trip fuel accuracy is made. If annotations are missing, automatic effects
+fail closed (evidence-only). OSRM data and OSM obstacle data must refer to a
+compatible dated extract; otherwise ID membership may be stale.

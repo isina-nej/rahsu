@@ -13,7 +13,7 @@ type Route = {
   index:number; distance_m:number; osrm_duration_s:number; modeled_duration_s:number;
   estimated_l:number;estimated_range_l:number[];baseline_l:number;
   idle_l:number;propulsion_l:number;warnings:string[];
-  obstacle_summary:{nearby:number;reviewed_applied:number;signals_scenario:number;stops:number;slowdowns:number};
+  obstacle_summary:{nearby:number;reviewed_applied:number;topology_matched_osm_calming?:number;total_applied?:number;signals_scenario:number;stops:number;slowdowns:number};
   terrain:{ascent_m:number;descent_m:number}|null;
   model_version:string;geometry:{type:'LineString';coordinates:number[][]}
 };
@@ -31,7 +31,8 @@ const warnings:Record<string,string>={
   grade_not_measured:'اطلاعات ارتفاع مسیر موجود نیست؛ شیب در محاسبه لحاظ نشده است.',
   grade_provider_unavailable:'سرویس ارتفاع در دسترس نیست.',
   signal_red_probability_is_assumed:'احتمال قرمز بودن چراغ فرضی است.',
-  unreviewed_osm_not_applied:'موانع OSM بدون تأیید مدیر وارد محاسبه نشده‌اند.',
+  unreviewed_osm_not_applied:'موانع بدون تطبیق معتبر روی مسیر وارد محاسبه نشده‌اند.',
+  osm_signals_stops_require_direction_review:'چراغ‌های راهنمایی و تابلوهای ایست OSM به تأیید جهت حرکت نیاز دارند.',
   manual_obstacle_matching_is_conservative:'تطبیق موانع با مسیر محافظه‌کارانه است.',
   idealized_engine_and_drive_cycle:'مدل موتور و الگوی حرکت ساده‌سازی شده‌اند.',
   dem_resolution_limited:'داده ارتفاع محدودیت تفکیک مکانی دارد.'
@@ -456,7 +457,8 @@ export default function App(){
         </div>
         <h3><TrafficCone size={16}/> شواهد موانع</h3>
         <p>نزدیک مسیر: {faNum(active.obstacle_summary.nearby,0)} مورد ·
-          اثرگذار پس از تأیید: {faNum(active.obstacle_summary.reviewed_applied,0)} مورد</p>
+          تأییدشده دستی: {faNum(active.obstacle_summary.reviewed_applied,0)} مورد ·
+          تطبیق خودکار با نود مسیر: {faNum(active.obstacle_summary.topology_matched_osm_calming??0,0)} مورد</p>
         <p>توقف مدل‌شده: {faNum(active.obstacle_summary.stops,0)} ·
           کاهش سرعت: {faNum(active.obstacle_summary.slowdowns,0)} ·
           چراغ در سناریو: {faNum(active.obstacle_summary.signals_scenario,0)}</p>

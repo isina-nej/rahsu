@@ -113,7 +113,9 @@ def match_obstacles(
         elif reviewed:
             reason = "reviewed_named_road_bidirectional"
         elif not ob.verified:
-            reason = "not_reviewed_or_not_on_traversed_osm_nodes"
+            reason = ("not_reviewed_or_not_on_traversed_osm_nodes"
+                      if ob.source == "osm" and ob.osm_id is not None
+                      else "not_reviewed")
         else:
             reason = "road_or_direction_not_confirmed"
         projected.append(ProjectedObstacle(
