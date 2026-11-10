@@ -29,3 +29,11 @@ def test_smoke_fails_without_topology_evidence():
     bad={**GOOD,'routes':[{**GOOD['routes'][0],'obstacle_summary':{}}]}
     with pytest.raises(ValueError):
         validate_estimate(bad)
+
+
+def test_activation_checks_real_mld_artifacts():
+    from pathlib import Path
+    script=(Path(__file__).resolve().parents[1]/'scripts/activate_tehran.sh').read_text(encoding='utf-8')
+    assert 'tehran.osrm.partition' in script
+    assert 'tehran.osrm.cells' in script
+    assert 'test -s data/osrm/tehran.osrm ||' not in script
