@@ -25,3 +25,8 @@ test-results/
 *.geojsonl
 coverage/
 secrets/
+
+# Local OSM, DEM, user observations and encrypted database snapshots
+data/
+*.age
+*.age.sha256
