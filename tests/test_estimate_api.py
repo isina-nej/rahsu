@@ -111,3 +111,14 @@ def test_explicit_opt_in_stores_osm_source_version_for_reproducibility(settings)
     assert result.status_code==200,result.content
     assert RouteRequest.objects.get().source_version=='2026-10-31T00:00:00Z'
     assert result.data['routes'][0]['map_data_version']=='2026-10-31T00:00:00Z'
+
+@pytest.mark.django_db
+def test_postgis_corridor_excludes_obstacles_near_bbox_but_off_route():
+    from apps.routing.views import _nearby_obstacles
+    along=Obstacle.objects.create(kind='bump',osm_type='node',osm_id=991,
+        location=Point(51.305,35.7,srid=4326),source='osm')
+    Obstacle.objects.create(kind='hump',osm_type='node',osm_id=992,
+        location=Point(51.305,35.70022,srid=4326),source='osm')
+    route=RouteCandidate(940,110,ROUTE)
+    rows=_nearby_obstacles(route)
+    assert {x.id for x in rows}=={along.pk}
