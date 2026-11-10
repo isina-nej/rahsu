@@ -4,7 +4,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 test -f .env || { echo "Create private .env (cp .env.example .env) and rotate secrets." >&2; exit 2; }
-test -s data/osrm/tehran.osrm || { echo "Missing Tehran OSRM graph. Run scripts/build_tehran_dataset.sh first." >&2; exit 2; }
+# An MLD graph is a *set* of .osrm.* artifacts, not necessarily a
+# standalone nonempty tehran.osrm base file.
+for artifact in data/osrm/tehran.osrm.partition data/osrm/tehran.osrm.cells; do
+  [[ -s "$artifact" ]] || {
+    echo "Missing MLD graph artifact: $artifact; run scripts/build_tehran_dataset.sh." >&2
+    exit 2
+  }
+done
 test -s data/osm/tehran-obstacles.geojson || { echo "Missing actual Tehran OSM obstacle export." >&2; exit 2; }
 python3 scripts/preflight.py --env .env --mode staging
 docker compose config --quiet
