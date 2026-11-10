@@ -5,7 +5,6 @@ import logging
 from django.conf import settings
 from django.contrib.gis.geos import Point, LineString
 from apps.routing.models import RouteRequest, RoutePrediction
-from django.contrib.gis.geos import Polygon
 from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -47,12 +46,20 @@ class EstimateSerializer(serializers.Serializer):
 
 
 def _nearby_obstacles(route) -> list[ObstaclePoint]:
-    """PostGIS index bbox prefilter; conservative exact match happens in domain."""
-    lons=[x[0] for x in route.coordinates];lats=[x[1] for x in route.coordinates]
-    if len(lons)<2:return []
-    bounds=(min(lons)-0.0003,min(lats)-0.0003,max(lons)+0.0003,max(lats)+0.0003)
-    box=Polygon.from_bbox(bounds)
-    rows=Obstacle.objects.filter(location__bboverlaps=box).exclude(source='removed').order_by('id')[:8000]
+    """GIS-indexed 15m corridor instead of every obstacle in the route bbox.
+
+    The domain matcher still applies its stricter 12m threshold and topology
+    rules; ST_DWithin is only an efficient candidate filter, not evidence
+    that the obstacle affects the vehicle's direction or fuel usage.
+    """
+    from django.contrib.gis.measure import D
+    if len(route.coordinates)<2:
+        return []
+    line=LineString(*route.coordinates,srid=4326)
+    rows=(Obstacle.objects
+          .filter(location__dwithin=(line,D(m=15)))
+          .exclude(source='removed')
+          .order_by('id')[:8000])
     return [ObstaclePoint(x.pk,x.kind,x.location.x,x.location.y,
             x.verified,x.road_name,x.direction,x.source,x.osm_type,x.osm_id)
             for x in rows]
