@@ -1,11 +1,12 @@
 """Import osmium-exported GeoJSON obstacle nodes; reviewed overlays win."""
+import hashlib
 import json
 from pathlib import Path
 from django.contrib.gis.geos import Point
 from django.core.management.base import BaseCommand,CommandError
 from django.db import transaction
 from domain.osm_geojson import parse_obstacle_geojson
-from apps.geo.models import Obstacle
+from apps.geo.models import Obstacle, ObstacleImportBatch
 
 class Command(BaseCommand):
     help='Import Tehran obstacle GeoJSON exported by osmium'
@@ -19,9 +20,13 @@ class Command(BaseCommand):
         if not path.is_file() or path.stat().st_size>200_000_000:
             raise CommandError('Missing or oversized GeoJSON file')
         try:
-            features=parse_obstacle_geojson(json.loads(path.read_text(encoding='utf-8')))
+            payload=path.read_bytes()
+            fingerprint=hashlib.sha256(payload).hexdigest()
+            features=parse_obstacle_geojson(json.loads(payload.decode('utf-8')))
+            if not features:
+                raise ValueError('No compatible OSM obstacle nodes in input')
         except (ValueError,UnicodeError,OSError) as e:
-            raise CommandError('Invalid data/provenance in GeoJSON') from e
+            raise CommandError('Invalid or empty OSM obstacle GeoJSON') from e
         added=updated=preserved=0
         for item in features:
             existing=Obstacle.objects.filter(osm_type='node',osm_id=item.osm_id).first()
@@ -33,5 +38,12 @@ class Command(BaseCommand):
                           'source':'osm','verified':False})
             added+=created
             updated+=not created
+        ObstacleImportBatch.objects.create(
+            source_filename=path.name[:128], file_sha256=fingerprint,
+            recognized_nodes=len(features),
+            created_count=added, updated_count=updated,
+            reviewed_preserved_count=preserved,
+        )
         self.stdout.write(self.style.SUCCESS(
-            f'Tehran obstacles imported: {added} new; {updated} updated; {preserved} reviewed preserved'))
+            f'Tehran obstacles imported: {added} new; {updated} updated; '
+            f'{preserved} reviewed preserved; sha256={fingerprint}'))

@@ -2,7 +2,7 @@
 import httpx
 from django.conf import settings
 from rest_framework.response import Response
-from apps.geo.models import Obstacle
+from apps.geo.models import Obstacle, ObstacleImportBatch
 from apps.vehicles.models import VehicleVariant
 from apps.calibration.models import ObservedTrip
 from .views import OpsView
@@ -26,6 +26,7 @@ class DataReadinessView(OpsView):
             pass
         obstacles = Obstacle.objects.exclude(source='removed')
         amount = obstacles.count()
+        last_import = ObstacleImportBatch.objects.order_by('-created_at').first()
         reviewed = obstacles.filter(verified=True).count()
         pride = VehicleVariant.objects.filter(slug='pride-131').first()
         holdout = ObservedTrip.objects.filter(
@@ -35,8 +36,13 @@ class DataReadinessView(OpsView):
             'stage': 'research_uncalibrated' if base_ready else 'missing_prerequisites',
             'routing': {'osrm_reachable': road_graph,
                         'network_coverage_verified': False},
-            'obstacles': {'recorded': amount, 'reviewed': reviewed,
-                          'city_coverage_verified': False},
+            'obstacles': {
+                'recorded': amount, 'reviewed': reviewed,
+                'last_import_sha256': last_import.file_sha256 if last_import else None,
+                'last_import_at': last_import.created_at if last_import else None,
+                'last_import_recognized_nodes': last_import.recognized_nodes if last_import else None,
+                'city_coverage_verified': False,
+            },
             'vehicle': {'pride_seeded': bool(pride),
                         'calibrated': bool(pride and pride.calibrated)},
             'measurement': {'holdout_trips': holdout},

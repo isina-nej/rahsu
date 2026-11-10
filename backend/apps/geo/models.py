@@ -40,3 +40,17 @@ class ObstacleRevision(models.Model):
     before = models.JSONField(default=dict)
     after = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class ObstacleImportBatch(models.Model):
+    """Immutable provenance for each successful real-data import."""
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    file_sha256 = models.CharField(max_length=64, db_index=True)
+    source_filename = models.CharField(max_length=128)
+    recognized_nodes = models.PositiveIntegerField(default=0)
+    created_count = models.PositiveIntegerField(default=0)
+    updated_count = models.PositiveIntegerField(default=0)
+    reviewed_preserved_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ('-created_at',)
