@@ -28,3 +28,14 @@ Docker services are intentionally absent in CI). HTTPS, MFA, independent
 backups/restoration, immutable image pinning and operator access controls
 must be completed before public production exposure. Do not claim
 scientific fuel accuracy without measured Pride holdout validation.
+
+## OSRM reproducibility
+
+The map preparation container and `docker compose` route-serving container
+now consume the same `OSRM_IMAGE` SHA256-pinned reference (default:
+`ghcr.io/project-osrm/osrm-backend:v26.10.0-debian@sha256:55dbfd47d984c2cacd64e32901b4321c86b5ec761438e69aa053dc78698a786f`). This is a known registry-published v26.10 Debian image. Do not
+use `:latest` during production graph rebuilds: the graph format can change.
+Operators may override `OSRM_IMAGE` with another verified digest, but both
+preparation and runtime must use it together and rebuilding may be necessary.
+
+The protected production preflight rejects unpinned OSRM images.

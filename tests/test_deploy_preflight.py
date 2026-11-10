@@ -38,6 +38,7 @@ def test_production_requires_trusted_https_proxy(valid):
     assert "production_https_csrf_origin_required" in errors
     assert "production_public_host_required" in errors
     valid.update({
+        "OSRM_IMAGE": "ghcr.io/project-osrm/osrm-backend:v26.10.0-debian@sha256:55dbfd47d984c2cacd64e32901b4321c86b5ec761438e69aa053dc78698a786f",
         "TRUST_REVERSE_PROXY": "1",
         "DJANGO_ALLOWED_HOSTS": "fuel.example.org",
         "DJANGO_CSRF_TRUSTED_ORIGINS": "https://fuel.example.org",

@@ -6,6 +6,7 @@ secret values. It never modifies the host, environment, or database.
 """
 import argparse
 import os
+import re
 import stat
 import sys
 from pathlib import Path
@@ -62,6 +63,9 @@ def validate(values: dict[str, str], mode: str, permissions: int) -> list[str]:
     if values.get("ALLOW_PUBLIC_SIGNUP", "0") != "0":
         errors.append("public_registration_must_remain_closed")
     if mode == "production":
+        image = values.get("OSRM_IMAGE", "")
+        if not re.fullmatch(r"ghcr\\.io/project-osrm/osrm-backend:[\\w.-]+@sha256:[a-f0-9]{64}",image):
+            errors.append("production_osrm_image_digest_required")
         if values.get("TRUST_REVERSE_PROXY") != "1":
             errors.append("trusted_https_proxy_required")
         csrf = [v.strip() for v in values.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")]

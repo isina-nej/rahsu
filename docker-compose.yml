@@ -46,7 +46,7 @@ services:
     depends_on: [api]
     ports: ["127.0.0.1:8080:80"]
   osrm:
-    image: ghcr.io/project-osrm/osrm-backend:latest
+    image: ${OSRM_IMAGE:-ghcr.io/project-osrm/osrm-backend:v26.10.0-debian@sha256:55dbfd47d984c2cacd64e32901b4321c86b5ec761438e69aa053dc78698a786f}
     profiles: [routing]
     command: ["osrm-routed","--algorithm","mld","/data/tehran.osrm"]
     volumes: ["./data/osrm:/data:ro"]
